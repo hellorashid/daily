@@ -5,6 +5,47 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 
+ENV_FILE="${RELEASE_ENV_FILE:-$ROOT_DIR/.env.release.local}"
+
+if [[ -f "$ENV_FILE" ]]; then
+  while IFS= read -r raw_line || [[ -n "$raw_line" ]]; do
+    line="${raw_line%$'\r'}"
+
+    if [[ -z "${line//[[:space:]]/}" ]]; then
+      continue
+    fi
+
+    if [[ "$line" =~ ^[[:space:]]*# ]]; then
+      continue
+    fi
+
+    if [[ ! "$line" =~ ^[[:space:]]*([A-Za-z_][A-Za-z0-9_]*)=(.*)$ ]]; then
+      echo "Invalid line in ${ENV_FILE}: ${line}" >&2
+      exit 1
+    fi
+
+    key="${BASH_REMATCH[1]}"
+    value="${BASH_REMATCH[2]}"
+
+    value="${value#"${value%%[![:space:]]*}"}"
+    value="${value%"${value##*[![:space:]]}"}"
+
+    if (( ${#value} >= 2 )); then
+      if [[ "$value" == '"'*'"' || "$value" == "'"*"'" ]]; then
+        value="${value:1:${#value}-2}"
+      fi
+    fi
+
+    if [[ "$value" == "~/"* ]]; then
+      value="${HOME}/${value#~/}"
+    elif [[ "$value" == '$HOME/'* ]]; then
+      value="${HOME}/${value#\$HOME/}"
+    fi
+
+    export "$key=$value"
+  done < "$ENV_FILE"
+fi
+
 if [[ "${1:-}" == "--help" ]]; then
   cat <<'EOF'
 Builds both macOS updater targets, generates latest.json, and publishes a GitHub Release.
@@ -13,9 +54,17 @@ Usage:
   npm run release:github
 
 Environment:
+  RELEASE_ENV_FILE
   TAURI_SIGNING_PRIVATE_KEY
   TAURI_SIGNING_PRIVATE_KEY_PATH
   TAURI_SIGNING_PRIVATE_KEY_PASSWORD
+  APPLE_SIGNING_IDENTITY
+  APPLE_API_ISSUER
+  APPLE_API_KEY
+  APPLE_API_KEY_PATH
+  APPLE_ID
+  APPLE_PASSWORD
+  APPLE_TEAM_ID
   RELEASE_BODY
   GITHUB_REPOSITORY
 EOF
@@ -34,6 +83,11 @@ fi
 
 if ! command -v rustup >/dev/null 2>&1; then
   echo "rustup is required to add macOS targets." >&2
+  exit 1
+fi
+
+if ! xcrun --find notarytool >/dev/null 2>&1; then
+  echo "Apple notarytool is required. Install Xcode or the Xcode Command Line Tools." >&2
   exit 1
 fi
 
@@ -71,6 +125,54 @@ if [[ -z "${TAURI_SIGNING_PRIVATE_KEY:-}" ]]; then
 fi
 
 export TAURI_SIGNING_PRIVATE_KEY_PASSWORD="${TAURI_SIGNING_PRIVATE_KEY_PASSWORD:-}"
+
+if [[ -z "${APPLE_SIGNING_IDENTITY:-}" ]]; then
+  APPLE_SIGNING_IDENTITY="$(security find-identity -v -p codesigning | awk -F'"' '/Developer ID Application:/ { print $2; exit }')"
+
+  if [[ -z "$APPLE_SIGNING_IDENTITY" ]]; then
+    echo "No Developer ID Application certificate was found in your keychain." >&2
+    echo "Install one locally or set APPLE_SIGNING_IDENTITY explicitly." >&2
+    exit 1
+  fi
+
+  export APPLE_SIGNING_IDENTITY
+fi
+
+api_creds_present=0
+apple_id_creds_present=0
+
+if [[ -n "${APPLE_API_ISSUER:-}${APPLE_API_KEY:-}${APPLE_API_KEY_PATH:-}" ]]; then
+  api_creds_present=1
+fi
+
+if [[ -n "${APPLE_ID:-}${APPLE_PASSWORD:-}${APPLE_TEAM_ID:-}" ]]; then
+  apple_id_creds_present=1
+fi
+
+if (( api_creds_present )); then
+  if [[ -z "${APPLE_API_ISSUER:-}" || -z "${APPLE_API_KEY:-}" || -z "${APPLE_API_KEY_PATH:-}" ]]; then
+    echo "App Store Connect notarization requires APPLE_API_ISSUER, APPLE_API_KEY, and APPLE_API_KEY_PATH." >&2
+    exit 1
+  fi
+
+  if [[ ! -f "${APPLE_API_KEY_PATH}" ]]; then
+    echo "APPLE_API_KEY_PATH does not point to a readable file: ${APPLE_API_KEY_PATH}" >&2
+    exit 1
+  fi
+elif (( apple_id_creds_present )); then
+  if [[ -z "${APPLE_ID:-}" || -z "${APPLE_PASSWORD:-}" || -z "${APPLE_TEAM_ID:-}" ]]; then
+    echo "Apple ID notarization requires APPLE_ID, APPLE_PASSWORD, and APPLE_TEAM_ID." >&2
+    exit 1
+  fi
+else
+  echo "Missing notarization credentials." >&2
+  echo "Set App Store Connect API values (APPLE_API_ISSUER, APPLE_API_KEY, APPLE_API_KEY_PATH)" >&2
+  echo "or Apple ID values (APPLE_ID, APPLE_PASSWORD, APPLE_TEAM_ID)." >&2
+  echo "You can place them in ${ENV_FILE}." >&2
+  exit 1
+fi
+
+echo "Using signing identity: ${APPLE_SIGNING_IDENTITY}"
 
 rustup target add aarch64-apple-darwin x86_64-apple-darwin >/dev/null
 

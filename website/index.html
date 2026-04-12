@@ -1,0 +1,333 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="Daily is a calm macOS menu bar notebook that keeps one markdown note per day."
+    />
+    <meta name="theme-color" content="#0b111b" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Daily" />
+    <meta property="og:title" content="Daily | A calm menu bar notebook for macOS" />
+    <meta
+      property="og:description"
+      content="Daily is a calm macOS menu bar notebook that keeps one markdown note per day."
+    />
+    <meta property="og:image" content="./assets/og-social.png" />
+    <meta property="og:image:type" content="image/png" />
+    <meta property="og:image:width" content="2462" />
+    <meta property="og:image:height" content="1578" />
+    <meta
+      property="og:image:alt"
+      content="A social preview of Daily showing a macOS-style desktop with an ocean wallpaper and an open note panel."
+    />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Daily | A calm menu bar notebook for macOS" />
+    <meta
+      name="twitter:description"
+      content="Daily is a calm macOS menu bar notebook that keeps one markdown note per day."
+    />
+    <meta name="twitter:image" content="./assets/og-social.png" />
+    <meta
+      name="twitter:image:alt"
+      content="A social preview of Daily showing a macOS-style desktop with an ocean wallpaper and an open note panel."
+    />
+    <title>Daily | Menu Bar Landing Page</title>
+    <link rel="icon" type="image/svg+xml" href="./assets/logo-app.svg" />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="page" id="page">
+      <header class="menu-bar" aria-label="macOS menu bar">
+        <div class="menu-group">
+          <div class="menu-slot" data-menu-root>
+            <button
+              class="menu-trigger menu-trigger--accent"
+              type="button"
+              data-menu-trigger="daily"
+            >
+              Daily
+            </button>
+            <div class="menu-dropdown" data-menu="daily">
+              <a
+                class="menu-entry"
+                href="https://github.com/hellorashid/daily"
+                rel="noreferrer"
+                target="_blank"
+              >
+                <span class="menu-entry__indicator"></span>
+                <span class="menu-entry__label">GitHub</span>
+              </a>
+              <a
+                class="menu-entry"
+                href="https://x.com/razberrychai"
+                rel="noreferrer"
+                target="_blank"
+              >
+                <span class="menu-entry__indicator"></span>
+                <span class="menu-entry__label">Twitter</span>
+              </a>
+            </div>
+          </div>
+
+          <div class="menu-slot" data-menu-root>
+            <button class="menu-trigger" type="button" data-menu-trigger="download">Download</button>
+            <div class="menu-dropdown" data-menu="download">
+              <a
+                class="menu-entry"
+                href="https://github.com/hellorashid/daily/releases/latest"
+                rel="noreferrer"
+                target="_blank"
+              >
+                <span class="menu-entry__indicator"></span>
+                <span class="menu-entry__label">Mac</span>
+              </a>
+              <button class="menu-entry menu-entry--disabled" disabled type="button">
+                <span class="menu-entry__indicator"></span>
+                <span class="menu-entry__label">Windows coming soon</span>
+              </button>
+            </div>
+          </div>
+
+        </div>
+
+        <div class="menu-group menu-group--right">
+          <div class="status-toggle-wrap" id="statusToggleWrap">
+            <button
+              class="status-button status-button--daily"
+              id="dailyToggle"
+              type="button"
+              data-action="toggle-panel"
+              aria-label="Toggle Daily panel"
+            >
+              <img class="status-logo" src="./assets/logo.svg" alt="" />
+            </button>
+            <span class="status-tooltip" id="statusTooltip" hidden>Click me</span>
+          </div>
+          <time class="status-time" id="statusTime"></time>
+        </div>
+      </header>
+
+      <main class="desktop-stage">
+        <section class="daily-panel" id="dailyPanel" aria-label="Daily app panel">
+          <div class="panel-frame">
+            <header class="panel-header">
+              <div class="header-side">
+                <button
+                  aria-label="Previous day"
+                  class="header-icon"
+                  type="button"
+                  data-action="navigate-date"
+                  data-direction="-1"
+                >
+                  <svg aria-hidden="true" viewBox="0 0 24 24">
+                    <path
+                      d="m14.5 6.5-5 5 5 5"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="1.6"
+                    />
+                  </svg>
+                </button>
+
+                <div class="header-date-wrap" id="datePicker">
+                  <button
+                    aria-expanded="false"
+                    aria-label="Choose note date"
+                    class="header-icon header-date-trigger"
+                    id="dateToggle"
+                    type="button"
+                    data-action="toggle-calendar"
+                  >
+                    <svg aria-hidden="true" viewBox="0 0 24 24">
+                      <path
+                        d="M7 4.5v2.2M17 4.5v2.2M5.5 8.2h13M6.3 6.5h11.4a.8.8 0 0 1 .8.8v10a1.2 1.2 0 0 1-1.2 1.2H6.7a1.2 1.2 0 0 1-1.2-1.2v-10a.8.8 0 0 1 .8-.8Z"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="1.45"
+                      />
+                      <path
+                        d="m10 13 2 2 3.5-4"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="1.45"
+                      />
+                    </svg>
+                  </button>
+
+                  <div class="calendar-popover" id="calendarPopover" hidden>
+                    <div class="calendar-popover-header">
+                      <button
+                        class="calendar-month-nav"
+                        type="button"
+                        data-action="navigate-month"
+                        data-direction="-1"
+                        aria-label="Previous month"
+                      >
+                        <svg viewBox="0 0 24 24" aria-hidden="true">
+                          <path
+                            d="m14.6 6.5-5.2 5.5 5.2 5.5"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            stroke-width="1.6"
+                          />
+                        </svg>
+                      </button>
+                      <p class="calendar-month-label" id="calendarMonthLabel"></p>
+                      <button
+                        class="calendar-month-nav"
+                        type="button"
+                        data-action="navigate-month"
+                        data-direction="1"
+                        aria-label="Next month"
+                      >
+                        <svg viewBox="0 0 24 24" aria-hidden="true">
+                          <path
+                            d="m9.4 6.5 5.2 5.5-5.2 5.5"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            stroke-width="1.6"
+                          />
+                        </svg>
+                      </button>
+                    </div>
+                    <div class="calendar-weekdays">
+                      <span class="calendar-weekday">S</span>
+                      <span class="calendar-weekday">M</span>
+                      <span class="calendar-weekday">T</span>
+                      <span class="calendar-weekday">W</span>
+                      <span class="calendar-weekday">T</span>
+                      <span class="calendar-weekday">F</span>
+                      <span class="calendar-weekday">S</span>
+                    </div>
+                    <div class="calendar-grid" id="calendarGrid"></div>
+                  </div>
+                </div>
+
+                <button
+                  aria-label="Next day"
+                  class="header-icon"
+                  type="button"
+                  data-action="navigate-date"
+                  data-direction="1"
+                >
+                  <svg aria-hidden="true" viewBox="0 0 24 24">
+                    <path
+                      d="m9.5 6.5 5 5-5 5"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="1.6"
+                    />
+                  </svg>
+                </button>
+              </div>
+
+              <h2 class="header-title" id="panelDateTitle"></h2>
+
+              <div class="header-side header-side-right">
+                <button aria-label="Open folder in Finder" class="header-icon" type="button">
+                  <svg aria-hidden="true" viewBox="0 0 24 24">
+                    <path
+                      d="M3.5 7.5h5l1.6 2H20a.5.5 0 0 1 .5.5v7.5a1 1 0 0 1-1 1H4.5a1 1 0 0 1-1-1v-9a1 1 0 0 1 1-1Z"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-linejoin="round"
+                      stroke-width="1.5"
+                    />
+                  </svg>
+                </button>
+                <button aria-label="Open settings" class="header-icon" type="button">
+                  <svg aria-hidden="true" viewBox="0 0 24 24">
+                    <path
+                      d="M12 8.7a3.3 3.3 0 1 0 0 6.6 3.3 3.3 0 0 0 0-6.6Zm9 3.3-.08-.88-2.2-.62a7.35 7.35 0 0 0-.58-1.4l1.1-2-1.76-1.77-2 1.1a7.34 7.34 0 0 0-1.4-.58l-.62-2.2L12 3l-.88.08-.62 2.2c-.49.13-.96.32-1.4.58l-2-1.1-1.77 1.76 1.1 2c-.26.44-.45.91-.58 1.4l-2.2.62L3 12l.08.88 2.2.62c.13.49.32.96.58 1.4l-1.1 2 1.76 1.77 2-1.1c.44.26.91.45 1.4.58l.62 2.2L12 21l.88-.08.62-2.2c.49-.13.96-.32 1.4-.58l2 1.1 1.77-1.76-1.1-2c.26-.44.45-.91.58-1.4l2.2-.62L21 12Z"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="1.4"
+                    />
+                  </svg>
+                </button>
+              </div>
+            </header>
+
+            <div class="panel-body">
+              <section class="note-view">
+                <div class="ink-editor-shell">
+                  <article
+                    class="note-editor"
+                    id="noteEditor"
+                    contenteditable="true"
+                    spellcheck="false"
+                    data-placeholder="Start writing."
+                  ></article>
+                </div>
+              </section>
+            </div>
+          </div>
+        </section>
+      </main>
+
+      <div class="photo-credit" id="photoCredit">
+        <button
+          class="photo-credit-toggle"
+          id="photoCreditToggle"
+          type="button"
+          data-action="toggle-photo-credit"
+          aria-expanded="false"
+          aria-label="Open photo credits"
+        >
+          <svg aria-hidden="true" viewBox="0 0 24 24">
+            <path
+              d="M12 8.25a.75.75 0 1 0 0-1.5.75.75 0 0 0 0 1.5Zm-1.1 2.2h1.5v6.1h-1.5z"
+              fill="currentColor"
+            />
+            <circle
+              cx="12"
+              cy="12"
+              r="8.25"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.4"
+            />
+          </svg>
+        </button>
+
+        <div class="photo-credit-popover" id="photoCreditPopover" hidden>
+          <p>
+            Photo by
+            <a
+              href="https://unsplash.com/@iswanto?utm_source=unsplash&utm_medium=referral&utm_content=creditCopyText"
+              rel="noreferrer"
+              target="_blank"
+              >Iswanto Arif</a
+            >
+            on
+            <a
+              href="https://unsplash.com/photos/aerial-photography-of-seashore-OJ74pFtrYi0?utm_source=unsplash&utm_medium=referral&utm_content=creditCopyText"
+              rel="noreferrer"
+              target="_blank"
+              >Unsplash</a
+            >
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <script src="./script.js" defer></script>
+  </body>
+</html>

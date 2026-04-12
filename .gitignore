@@ -24,9 +24,10 @@ dist-ssr
 *.sw?
 .codex/
 vite-dev.log
+.env.release.local
+.vercel/
 
 # Local design/export scratch files
-landing-page/
 public/daily_icon.icon/
 public/Icon-iOS-Default-1024x1024@1x.png
 public/dark_full.png
