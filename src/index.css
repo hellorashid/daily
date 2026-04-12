@@ -1,0 +1,61 @@
+:root {
+  --ink: #181818;
+  --muted: #7c7c7c;
+  --canvas: #f6f4f0;
+  --panel: #fbf9f5;
+  --panel-border: rgba(24, 24, 24, 0.08);
+  --editor: #fbf9f5;
+  --accent: #181818;
+
+  --sans: 'Avenir Next', 'Helvetica Neue', 'Segoe UI', sans-serif;
+  --heading: 'Avenir Next', 'Helvetica Neue', sans-serif;
+  --display: 'Iowan Old Style', 'Palatino Linotype', 'Book Antiqua', serif;
+  --mono: 'SF Mono', 'IBM Plex Mono', monospace;
+
+  font: 13px/1.45 var(--sans);
+  color: var(--ink);
+  background: var(--canvas);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+#root {
+  min-height: 100vh;
+}
+
+body {
+  margin: 0;
+  min-width: 100vw;
+  min-height: 100vh;
+  overflow: hidden;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+h1,
+h2,
+p,
+ul {
+  margin-block-start: 0;
+}
+
+h1,
+h2 {
+  font-family: var(--heading);
+  color: var(--ink);
+  font-weight: 600;
+}
+
+button,
+input,
+textarea {
+  font-family: var(--mono);
+}
+
+button {
+  cursor: pointer;
+}
