@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "Daily",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "identifier": "lol.raz.daily",
   "build": {
     "frontendDist": "../dist",

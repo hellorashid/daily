@@ -1,4 +1,5 @@
 type SettingsViewProps = {
+  appVersion: string | null
   currentFolder: string | null
   errorMessage: string | null
   fileNamePreview: string
@@ -11,6 +12,7 @@ type SettingsViewProps = {
 }
 
 export function SettingsView({
+  appVersion,
   currentFolder,
   errorMessage,
   fileNamePreview,
@@ -50,6 +52,7 @@ export function SettingsView({
           <span className="settings-path">{updateStatusLabel}</span>
         </button>
         <p className="settings-hint">{updateSummary}</p>
+        <p className="settings-meta">Current version: {appVersion ? `v${appVersion}` : 'Loading…'}</p>
         {errorMessage ? <p className="inline-message error">{errorMessage}</p> : null}
       </div>
     </section>

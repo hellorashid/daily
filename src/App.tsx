@@ -1,4 +1,5 @@
 import { invoke } from '@tauri-apps/api/core'
+import { getVersion } from '@tauri-apps/api/app'
 import { open } from '@tauri-apps/plugin-dialog'
 import { getCurrentWindow } from '@tauri-apps/api/window'
 import type { Update } from '@tauri-apps/plugin-updater'
@@ -67,6 +68,7 @@ function App() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [isChoosingFolder, setIsChoosingFolder] = useState(false)
+  const [appVersion, setAppVersion] = useState<string | null>(null)
   const [updateStatus, setUpdateStatus] = useState<UpdateStatus>({
     message: null,
     progress: null,
@@ -165,6 +167,22 @@ function App() {
   useEffect(() => {
     activeFilePathRef.current = note?.filePath ?? null
   }, [note])
+
+  useEffect(() => {
+    let cancelled = false
+
+    void getVersion()
+      .then((version) => {
+        if (!cancelled) {
+          setAppVersion(version)
+        }
+      })
+      .catch(() => null)
+
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   useEffect(() => {
     let cancelled = false
@@ -513,6 +531,7 @@ function App() {
     >
       {screen === 'settings' ? (
         <SettingsView
+          appVersion={appVersion}
           currentFolder={primaryFolder}
           errorMessage={errorMessage}
           fileNamePreview={getTodayFileName()}
