@@ -42,7 +42,21 @@ PRODUCT_NAME="$(node -e "console.log(JSON.parse(require('fs').readFileSync('src-
 REPO="${GITHUB_REPOSITORY:-$(gh repo view --json nameWithOwner -q .nameWithOwner)}"
 TAG="v${VERSION}"
 PUB_DATE="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
-RELEASE_BODY="${RELEASE_BODY:-See the assets to download and install this version.}"
+
+if [[ -z "${RELEASE_BODY:-}" ]]; then
+  RELEASE_BODY="$(cat <<EOF
+## Downloads
+
+- Apple Silicon Macs (M1, M2, M3, M4): download \`Daily_${VERSION}_aarch64.dmg\`
+- Intel Macs: download \`Daily_${VERSION}_x64.dmg\`
+
+## Notes
+
+- Most people should download a \`.dmg\` file.
+- The \`.app.tar.gz\`, \`.sig\`, and \`latest.json\` files are used by the in-app updater.
+EOF
+)"
+fi
 
 if [[ -z "${TAURI_SIGNING_PRIVATE_KEY:-}" ]]; then
   key_path="${TAURI_SIGNING_PRIVATE_KEY_PATH:-$HOME/.tauri/daily-updater.key}"
