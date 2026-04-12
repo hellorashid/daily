@@ -50,7 +50,7 @@
   },
   "plugins": {
     "updater": {
-      "pubkey": "untrusted comment: minisign public key: B235F4B25EDDD8AD\nRWSt2N1esvQ1stfFdhIVLlwF5EbV9OdBvebkrl+jZh9Gvh69iFI/7W3I",
+      "pubkey": "RWSt2N1esvQ1stfFdhIVLlwF5EbV9OdBvebkrl+jZh9Gvh69iFI/7W3I",
       "endpoints": [
         "https://github.com/hellorashid/daily/releases/latest/download/latest.json"
       ]

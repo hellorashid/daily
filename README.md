@@ -39,6 +39,31 @@ npm run tauri build -- --bundles app
 
 The packaged macOS app bundle is emitted under `src-tauri/target/release/bundle/macos/`.
 
+## Manual Releases
+
+Daily uses GitHub Releases as the updater feed, but releases are published manually from macOS instead of CI.
+
+Before publishing:
+
+```bash
+gh auth login
+```
+
+Make sure your updater private key exists at `~/.tauri/daily-updater.key`, or set `TAURI_SIGNING_PRIVATE_KEY` / `TAURI_SIGNING_PRIVATE_KEY_PATH` yourself.
+
+Then publish the release:
+
+```bash
+npm run release:github
+```
+
+That command:
+
+- builds both `aarch64-apple-darwin` and `x86_64-apple-darwin`
+- signs the updater bundles
+- generates `latest.json` for the Tauri updater
+- creates or updates the matching GitHub Release on `hellorashid/daily`
+
 ## Current Scope
 
 This repo is intentionally focused on the single-window menu bar MVP:
