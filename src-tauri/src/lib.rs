@@ -180,6 +180,7 @@ pub fn run() {
     tauri::Builder::default()
         .enable_macos_default_menu(false)
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_store::Builder::default().build())
         .manage(AutoHideState(AtomicBool::new(true)))
         .manage(notes::PrimaryFolderState::default())
@@ -203,6 +204,9 @@ pub fn run() {
                         .build(),
                 )?;
             }
+
+            app.handle()
+                .plugin(tauri_plugin_updater::Builder::new().build())?;
 
             build_tray(app)?;
 

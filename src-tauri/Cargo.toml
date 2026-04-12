@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "A macOS menu bar shell for Daily notes."
 authors = ["Raz"]
 license = ""
-repository = ""
+repository = "https://github.com/hellorashid/daily"
 edition = "2021"
 rust-version = "1.77.2"
 
@@ -26,3 +26,5 @@ tauri = { version = "2.10.3", features = ["tray-icon", "image-png"] }
 tauri-plugin-log = "2"
 tauri-plugin-dialog = "2.7.0"
 tauri-plugin-store = "2.4.2"
+tauri-plugin-updater = "2.10.1"
+tauri-plugin-process = "2.3.1"

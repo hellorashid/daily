@@ -1,6 +1,7 @@
 import { invoke } from '@tauri-apps/api/core'
 import { open } from '@tauri-apps/plugin-dialog'
 import { getCurrentWindow } from '@tauri-apps/api/window'
+import type { Update } from '@tauri-apps/plugin-updater'
 import { startTransition, useCallback, useEffect, useRef, useState } from 'react'
 
 import './App.css'
@@ -22,7 +23,13 @@ import {
   syncPrimaryFolder,
 } from './lib/note-client'
 import { loadPrimaryFolder, persistPrimaryFolder } from './lib/store'
-import type { DailyNotePayload, SaveState, Screen } from './lib/types'
+import type {
+  DailyNotePayload,
+  SaveState,
+  Screen,
+  UpdateStatus,
+} from './lib/types'
+import { checkForAppUpdate, installAppUpdate } from './lib/updater-client'
 
 function getErrorMessage(error: unknown) {
   if (error instanceof Error && error.message) {
@@ -36,6 +43,20 @@ function getErrorMessage(error: unknown) {
   return 'Something went sideways while syncing your note.'
 }
 
+function getUpdateErrorMessage(error: unknown) {
+  const message = getErrorMessage(error)
+
+  if (
+    message.includes('latest.json')
+    || message.includes('404')
+    || message.includes('could not fetch a valid release')
+  ) {
+    return 'No published release is available yet.'
+  }
+
+  return message
+}
+
 function App() {
   const [screen, setScreen] = useState<Screen>('settings')
   const [primaryFolder, setPrimaryFolder] = useState<string | null>(null)
@@ -46,9 +67,16 @@ function App() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [isChoosingFolder, setIsChoosingFolder] = useState(false)
+  const [updateStatus, setUpdateStatus] = useState<UpdateStatus>({
+    message: null,
+    progress: null,
+    state: 'idle',
+    version: null,
+  })
 
   const saveTimerRef = useRef<number | null>(null)
   const activeFilePathRef = useRef<string | null>(null)
+  const pendingUpdateRef = useRef<Update | null>(null)
 
   const isDirty = note !== null && draft !== lastSavedContent
   const canReturnToNote = Boolean(primaryFolder && note)
@@ -219,13 +247,13 @@ function App() {
 
   useEffect(() => {
     function handleWindowFocus() {
-      if (!primaryFolder || isChoosingFolder || isLoading || isDirty) {
+      if (!primaryFolder || isChoosingFolder || isLoading || isDirty || screen !== 'note') {
         return
       }
 
       const targetDateKey = getTodayDateKey()
 
-      if (!note || note.dateKey !== targetDateKey || screen === 'settings') {
+      if (!note || note.dateKey !== targetDateKey) {
         void loadNoteForDate(targetDateKey)
       }
     }
@@ -305,6 +333,103 @@ function App() {
     }
   }
 
+  async function handleUpdateAction() {
+    if (updateStatus.state === 'checking' || updateStatus.state === 'downloading') {
+      return
+    }
+
+    if (pendingUpdateRef.current && updateStatus.state === 'available') {
+      const update = pendingUpdateRef.current
+      let downloaded = 0
+      let contentLength = 0
+
+      setUpdateStatus((current) => ({
+        ...current,
+        message: 'Downloading and installing the update…',
+        progress: 0,
+        state: 'downloading',
+      }))
+
+      try {
+        await installAppUpdate(update, (event) => {
+          switch (event.event) {
+            case 'Started':
+              contentLength = event.data.contentLength ?? 0
+              setUpdateStatus((current) => ({
+                ...current,
+                message: 'Downloading update…',
+                progress: contentLength > 0 ? 0 : null,
+                state: 'downloading',
+              }))
+              break
+            case 'Progress':
+              downloaded += event.data.chunkLength
+              setUpdateStatus((current) => ({
+                ...current,
+                progress: contentLength > 0 ? Math.min(100, Math.round((downloaded / contentLength) * 100)) : null,
+                state: 'downloading',
+              }))
+              break
+            case 'Finished':
+              setUpdateStatus((current) => ({
+                ...current,
+                message: 'Update installed. Restarting Daily…',
+                progress: 100,
+                state: 'downloading',
+              }))
+              break
+          }
+        })
+      } catch (error) {
+        setUpdateStatus({
+          message: getUpdateErrorMessage(error),
+          progress: null,
+          state: 'error',
+          version: update.version,
+        })
+      }
+
+      return
+    }
+
+    setUpdateStatus({
+      message: 'Checking GitHub Releases…',
+      progress: null,
+      state: 'checking',
+      version: null,
+    })
+
+    try {
+      const update = await checkForAppUpdate()
+      pendingUpdateRef.current = update
+
+      if (!update) {
+        setUpdateStatus({
+          message: 'You’re already on the latest version.',
+          progress: null,
+          state: 'up-to-date',
+          version: null,
+        })
+        return
+      }
+
+      setUpdateStatus({
+        message: 'A new version is ready to install.',
+        progress: null,
+        state: 'available',
+        version: update.version,
+      })
+    } catch (error) {
+      pendingUpdateRef.current = null
+      setUpdateStatus({
+        message: getUpdateErrorMessage(error),
+        progress: null,
+        state: 'error',
+        version: null,
+      })
+    }
+  }
+
   async function handleNavigateDate(delta: number) {
     if (!primaryFolder || !note || isLoading) {
       return
@@ -347,6 +472,21 @@ function App() {
     await loadNoteForDate(dateKey)
   }
 
+  const updateStatusLabel =
+    updateStatus.state === 'available' && updateStatus.version
+      ? `Install v${updateStatus.version}`
+      : updateStatus.state === 'checking'
+        ? 'Checking for updates…'
+        : updateStatus.state === 'downloading'
+          ? updateStatus.progress !== null
+            ? `Installing… ${updateStatus.progress}%`
+            : 'Installing update…'
+          : 'Check for updates'
+
+  const updateSummary =
+    updateStatus.message
+    ?? 'GitHub Releases will power in-app updates after the first published release.'
+
   return (
     <AppShell
       currentDateKey={note?.dateKey ?? todayDateKey}
@@ -377,7 +517,13 @@ function App() {
           errorMessage={errorMessage}
           fileNamePreview={getTodayFileName()}
           isChoosingFolder={isChoosingFolder}
+          isUpdateActionDisabled={updateStatus.state === 'checking' || updateStatus.state === 'downloading'}
           onChooseFolder={handleChooseFolder}
+          onUpdateAction={() => {
+            void handleUpdateAction()
+          }}
+          updateStatusLabel={updateStatusLabel}
+          updateSummary={updateSummary}
         />
       ) : (
         <NoteView

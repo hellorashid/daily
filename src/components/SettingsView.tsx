@@ -3,7 +3,11 @@ type SettingsViewProps = {
   errorMessage: string | null
   fileNamePreview: string
   isChoosingFolder: boolean
+  isUpdateActionDisabled: boolean
   onChooseFolder: () => void
+  onUpdateAction: () => void
+  updateStatusLabel: string
+  updateSummary: string
 }
 
 export function SettingsView({
@@ -11,7 +15,11 @@ export function SettingsView({
   errorMessage,
   fileNamePreview,
   isChoosingFolder,
+  isUpdateActionDisabled,
   onChooseFolder,
+  onUpdateAction,
+  updateStatusLabel,
+  updateSummary,
 }: SettingsViewProps) {
   return (
     <section className="settings-view">
@@ -32,6 +40,16 @@ export function SettingsView({
           </span>
         </button>
         <p className="settings-hint">Next note: {fileNamePreview}</p>
+        <button
+          className="folder-select-button"
+          disabled={isUpdateActionDisabled}
+          onClick={onUpdateAction}
+          type="button"
+        >
+          <span className="settings-label">App Updates</span>
+          <span className="settings-path">{updateStatusLabel}</span>
+        </button>
+        <p className="settings-hint">{updateSummary}</p>
         {errorMessage ? <p className="inline-message error">{errorMessage}</p> : null}
       </div>
     </section>
