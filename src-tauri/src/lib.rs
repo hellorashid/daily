@@ -3,6 +3,7 @@ mod notes;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use tauri::{
+    image::Image,
     menu::{Menu, MenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
     ActivationPolicy, AppHandle, Manager, PhysicalPosition, PhysicalSize, Rect, Runtime,
@@ -140,6 +141,13 @@ fn build_tray<R: Runtime>(app: &mut tauri::App<R>) -> tauri::Result<()> {
         .show_menu_on_left_click(false)
         .tooltip("Daily");
 
+    #[cfg(target_os = "macos")]
+    {
+        let tray_icon = Image::from_bytes(include_bytes!("../icons/tray-template.png"))?;
+        tray_builder = tray_builder.icon(tray_icon).icon_as_template(true);
+    }
+
+    #[cfg(not(target_os = "macos"))]
     if let Some(icon) = app.default_window_icon().cloned() {
         tray_builder = tray_builder.icon(icon);
     }
