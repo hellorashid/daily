@@ -45,13 +45,15 @@ PUB_DATE="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
 RELEASE_BODY="${RELEASE_BODY:-See the assets to download and install this version.}"
 
 if [[ -z "${TAURI_SIGNING_PRIVATE_KEY:-}" ]]; then
-  export TAURI_SIGNING_PRIVATE_KEY_PATH="${TAURI_SIGNING_PRIVATE_KEY_PATH:-$HOME/.tauri/daily-updater.key}"
+  key_path="${TAURI_SIGNING_PRIVATE_KEY_PATH:-$HOME/.tauri/daily-updater.key}"
 
-  if [[ ! -f "${TAURI_SIGNING_PRIVATE_KEY_PATH}" ]]; then
-    echo "Missing updater private key at ${TAURI_SIGNING_PRIVATE_KEY_PATH}." >&2
+  if [[ ! -f "$key_path" ]]; then
+    echo "Missing updater private key at ${key_path}." >&2
     echo "Set TAURI_SIGNING_PRIVATE_KEY or place the key file there first." >&2
     exit 1
   fi
+
+  export TAURI_SIGNING_PRIVATE_KEY="$key_path"
 fi
 
 export TAURI_SIGNING_PRIVATE_KEY_PASSWORD="${TAURI_SIGNING_PRIVATE_KEY_PASSWORD:-}"
@@ -151,7 +153,7 @@ EOF
 upload_assets=()
 while IFS= read -r asset; do
   upload_assets+=("$asset")
-done < <(find "$TMP_DIR" -maxdepth 1 -type f | sort)
+done < <(find "$TMP_DIR" -maxdepth 1 -type f ! -name 'platforms.txt' | sort)
 
 if gh release view "$TAG" -R "$REPO" >/dev/null 2>&1; then
   gh release upload "$TAG" "${upload_assets[@]}" --clobber -R "$REPO"
