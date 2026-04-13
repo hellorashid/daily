@@ -3,7 +3,7 @@ import { getVersion } from '@tauri-apps/api/app'
 import { open } from '@tauri-apps/plugin-dialog'
 import { getCurrentWindow } from '@tauri-apps/api/window'
 import type { Update } from '@tauri-apps/plugin-updater'
-import { startTransition, useCallback, useEffect, useEffectEvent, useRef, useState } from 'react'
+import { useCallback, useEffect, useEffectEvent, useRef, useState } from 'react'
 
 import './App.css'
 import { AppShell } from './components/AppShell'
@@ -101,6 +101,8 @@ function isEditableTarget(target: EventTarget | null) {
   return tagName === 'INPUT' || tagName === 'TEXTAREA' || tagName === 'SELECT'
 }
 
+const UPDATE_CHECK_COOLDOWN_MS = 60 * 1000
+
 function App() {
   const [screen, setScreen] = useState<Screen>('settings')
   const [notebooks, setNotebooks] = useState<Notebook[]>([])
@@ -123,6 +125,9 @@ function App() {
   const saveTimerRef = useRef<number | null>(null)
   const activeFilePathRef = useRef<string | null>(null)
   const pendingUpdateRef = useRef<Update | null>(null)
+  const lastUpdateCheckAtRef = useRef<number>(0)
+  const lastKnownTodayKeyRef = useRef(getTodayDateKey())
+  const focusRefreshRequestRef = useRef(0)
 
   const isDirty = note !== null && draft !== lastSavedContent
   const activeNotebook = notebooks.find((notebook) => notebook.id === activeNotebookId) ?? null
@@ -313,25 +318,99 @@ function App() {
     }
   }, [clearSaveTimer, draft, flushDraft, isDirty, note])
 
-  useEffect(() => {
-    function handleWindowFocus() {
-      if (!activeFolder || isChoosingFolder || isLoading || isDirty || screen !== 'note') {
+  const checkForUpdatesOnOpen = useEffectEvent(() => {
+    if (isChoosingFolder || updateStatus.state === 'checking' || updateStatus.state === 'downloading') {
+      return
+    }
+
+    const now = Date.now()
+
+    if (now - lastUpdateCheckAtRef.current < UPDATE_CHECK_COOLDOWN_MS) {
+      return
+    }
+
+    lastUpdateCheckAtRef.current = now
+    void checkForUpdates()
+  })
+
+  const refreshNoteFromDisk = useEffectEvent(async (dateKey: string) => {
+    if (!activeFolder || isChoosingFolder || isLoading || screen !== 'note' || isDirty) {
+      return
+    }
+
+    const requestId = focusRefreshRequestRef.current + 1
+    focusRefreshRequestRef.current = requestId
+
+    try {
+      const payload = await openOrCreateNoteForDate(dateKey)
+
+      if (focusRefreshRequestRef.current !== requestId) {
         return
       }
 
-      const targetDateKey = getTodayDateKey()
+      if (!activeFolder || isChoosingFolder || isLoading || screen !== 'note' || isDirty) {
+        return
+      }
 
-      if (!note || note.dateKey !== targetDateKey) {
-        void loadNoteForDate(targetDateKey)
+      if (note && note.dateKey === dateKey && payload.content === lastSavedContent) {
+        return
+      }
+
+      hydrateNote(payload)
+    } catch (error) {
+      if (focusRefreshRequestRef.current === requestId) {
+        setSaveState('error')
+        setErrorMessage(getErrorMessage(error))
       }
     }
+  })
 
+  const handleWindowFocus = useEffectEvent(() => {
+    checkForUpdatesOnOpen()
+
+    if (!activeFolder || isChoosingFolder || isLoading || isDirty || screen !== 'note') {
+      return
+    }
+
+    const nextTodayKey = getTodayDateKey()
+    const previousTodayKey = lastKnownTodayKeyRef.current
+    lastKnownTodayKeyRef.current = nextTodayKey
+
+    const targetDateKey =
+      note && previousTodayKey !== nextTodayKey && note.dateKey === previousTodayKey
+        ? nextTodayKey
+        : note?.dateKey ?? nextTodayKey
+
+    void refreshNoteFromDisk(targetDateKey)
+  })
+
+  const handleWindowBlur = useEffectEvent(() => {
+    if (isChoosingFolder || isLoading || saveState === 'saving') {
+      return
+    }
+
+    if (isDirty) {
+      void flushDraft(draft)
+    }
+  })
+
+  const handleVisibilityChange = useEffectEvent(() => {
+    if (document.visibilityState === 'hidden') {
+      handleWindowBlur()
+    }
+  })
+
+  useEffect(() => {
     window.addEventListener('focus', handleWindowFocus)
+    window.addEventListener('blur', handleWindowBlur)
+    document.addEventListener('visibilitychange', handleVisibilityChange)
 
     return () => {
       window.removeEventListener('focus', handleWindowFocus)
+      window.removeEventListener('blur', handleWindowBlur)
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
     }
-  }, [activeFolder, isChoosingFolder, isDirty, isLoading, loadNoteForDate, note, screen])
+  }, [])
 
   const handleGlobalKeyDown = useEffectEvent((event: KeyboardEvent) => {
     if (event.isComposing || isChoosingFolder) {
@@ -612,65 +691,7 @@ function App() {
     }
   }
 
-  async function handleUpdateAction() {
-    if (updateStatus.state === 'checking' || updateStatus.state === 'downloading') {
-      return
-    }
-
-    if (pendingUpdateRef.current && updateStatus.state === 'available') {
-      const update = pendingUpdateRef.current
-      let downloaded = 0
-      let contentLength = 0
-
-      setUpdateStatus((current) => ({
-        ...current,
-        message: 'Downloading and installing the update…',
-        progress: 0,
-        state: 'downloading',
-      }))
-
-      try {
-        await installAppUpdate(update, (event) => {
-          switch (event.event) {
-            case 'Started':
-              contentLength = event.data.contentLength ?? 0
-              setUpdateStatus((current) => ({
-                ...current,
-                message: 'Downloading update…',
-                progress: contentLength > 0 ? 0 : null,
-                state: 'downloading',
-              }))
-              break
-            case 'Progress':
-              downloaded += event.data.chunkLength
-              setUpdateStatus((current) => ({
-                ...current,
-                progress: contentLength > 0 ? Math.min(100, Math.round((downloaded / contentLength) * 100)) : null,
-                state: 'downloading',
-              }))
-              break
-            case 'Finished':
-              setUpdateStatus((current) => ({
-                ...current,
-                message: 'Update installed. Restarting Daily…',
-                progress: 100,
-                state: 'downloading',
-              }))
-              break
-          }
-        })
-      } catch (error) {
-        setUpdateStatus({
-          message: getUpdateErrorMessage(error),
-          progress: null,
-          state: 'error',
-          version: update.version,
-        })
-      }
-
-      return
-    }
-
+  async function checkForUpdates() {
     setUpdateStatus({
       message: 'Checking GitHub Releases…',
       progress: null,
@@ -707,6 +728,73 @@ function App() {
         version: null,
       })
     }
+  }
+
+  async function installUpdate(update: Update) {
+    let downloaded = 0
+    let contentLength = 0
+
+    setUpdateStatus((current) => ({
+      ...current,
+      message: 'Downloading and installing the update…',
+      progress: 0,
+      state: 'downloading',
+    }))
+
+    try {
+      await installAppUpdate(update, (event) => {
+        switch (event.event) {
+          case 'Started':
+            contentLength = event.data.contentLength ?? 0
+            setUpdateStatus((current) => ({
+              ...current,
+              message: 'Downloading update…',
+              progress: contentLength > 0 ? 0 : null,
+              state: 'downloading',
+            }))
+            break
+          case 'Progress':
+            downloaded += event.data.chunkLength
+            setUpdateStatus((current) => ({
+              ...current,
+              progress:
+                contentLength > 0
+                  ? Math.min(100, Math.round((downloaded / contentLength) * 100))
+                  : null,
+              state: 'downloading',
+            }))
+            break
+          case 'Finished':
+            setUpdateStatus((current) => ({
+              ...current,
+              message: 'Update installed. Restarting Daily…',
+              progress: 100,
+              state: 'downloading',
+            }))
+            break
+        }
+      })
+    } catch (error) {
+      setUpdateStatus({
+        message: getUpdateErrorMessage(error),
+        progress: null,
+        state: 'error',
+        version: update.version,
+      })
+    }
+  }
+
+  async function handleUpdateAction() {
+    if (updateStatus.state === 'checking' || updateStatus.state === 'downloading') {
+      return
+    }
+
+    if (pendingUpdateRef.current && updateStatus.state === 'available') {
+      await installUpdate(pendingUpdateRef.current)
+      return
+    }
+
+    await checkForUpdates()
   }
 
   async function handleNavigateDate(delta: number) {
@@ -817,27 +905,25 @@ function App() {
           updateStatusLabel={updateStatusLabel}
           updateSummary={updateSummary}
         />
-      ) : (
-        <NoteView
-          draft={draft}
-          errorMessage={saveState === 'error' ? errorMessage : null}
+	      ) : (
+	        <NoteView
+	          draft={draft}
+	          errorMessage={saveState === 'error' ? errorMessage : null}
           isLoading={isLoading}
           note={note}
           onBlur={() => {
             if (isDirty) {
               void flushDraft(draft)
             }
-          }}
-          onChange={(value) => {
-            startTransition(() => {
-              setDraft(value)
-              setSaveState('idle')
-            })
-          }}
-        />
-      )}
-    </AppShell>
-  )
+	          }}
+	          onChange={(value) => {
+	            setDraft(value)
+	            setSaveState('idle')
+	          }}
+	        />
+	      )}
+	    </AppShell>
+	  )
 }
 
 export default App

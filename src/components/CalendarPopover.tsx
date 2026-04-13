@@ -19,7 +19,15 @@ type CalendarPopoverProps = {
   selectedDateKey: string
 }
 
-const weekdayLabels = ['S', 'M', 'T', 'W', 'T', 'F', 'S']
+const weekdayHeader = [
+  { key: 'sun', label: 'S' },
+  { key: 'mon', label: 'M' },
+  { key: 'tue', label: 'T' },
+  { key: 'wed', label: 'W' },
+  { key: 'thu', label: 'T' },
+  { key: 'fri', label: 'F' },
+  { key: 'sat', label: 'S' },
+] as const
 
 export function CalendarPopover({
   dataSourceKey,
@@ -131,8 +139,8 @@ export function CalendarPopover({
       </div>
 
       <div className="calendar-weekdays">
-        {weekdayLabels.map((label) => (
-          <span className="calendar-weekday" key={label}>
+        {weekdayHeader.map(({ key, label }) => (
+          <span className="calendar-weekday" key={key}>
             {label}
           </span>
         ))}
