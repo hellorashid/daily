@@ -30,3 +30,9 @@ export type ExistingNoteDatesPayload = {
 export type SaveDailyNotePayload = {
   persisted: boolean
 }
+
+export type Notebook = {
+  id: string
+  name: string
+  folderPath: string
+}

@@ -5,6 +5,7 @@ use std::{
     path::{Path, PathBuf},
     process::Command,
     sync::Mutex,
+    time::{SystemTime, UNIX_EPOCH},
 };
 use tauri::State;
 
@@ -29,30 +30,30 @@ pub struct SaveDailyNotePayload {
 }
 
 #[derive(Default)]
-pub struct PrimaryFolderState(pub Mutex<Option<PathBuf>>);
+pub struct NotebookFolderState(pub Mutex<Option<PathBuf>>);
 
 fn ensure_folder(folder_path: &str) -> Result<PathBuf, String> {
     let trimmed = folder_path.trim();
 
     if trimmed.is_empty() {
-        return Err("Choose a primary folder before opening today's note.".to_string());
+        return Err("Choose a notebook folder before opening today's note.".to_string());
     }
 
     let path = Path::new(trimmed).to_path_buf();
     fs::create_dir_all(&path)
-        .map_err(|error| format!("Couldn't create the primary folder: {error}"))?;
+        .map_err(|error| format!("Couldn't create the notebook folder: {error}"))?;
 
     fs::canonicalize(&path)
-        .map_err(|error| format!("Couldn't normalize the primary folder path: {error}"))
+        .map_err(|error| format!("Couldn't normalize the notebook folder path: {error}"))
 }
 
-fn current_primary_folder(state: &State<'_, PrimaryFolderState>) -> Result<PathBuf, String> {
+fn current_notebook_folder(state: &State<'_, NotebookFolderState>) -> Result<PathBuf, String> {
     state
         .0
         .lock()
-        .map_err(|_| "Daily lost access to the primary folder state.".to_string())?
+        .map_err(|_| "Daily lost access to the notebook folder state.".to_string())?
         .clone()
-        .ok_or_else(|| "Choose a primary folder before opening today's note.".to_string())
+        .ok_or_else(|| "Choose a notebook folder before opening today's note.".to_string())
 }
 
 fn parse_date_key(date_key: &str) -> Result<NaiveDate, String> {
@@ -81,15 +82,61 @@ fn build_note_path(folder: &Path, date: NaiveDate) -> PathBuf {
     folder.join(format!("{}.md", date.format("%Y-%m-%d")))
 }
 
+fn ensure_note_file_exists(note_path: &Path) -> Result<(), String> {
+    if note_path.exists() {
+        return Ok(());
+    }
+
+    if let Some(parent) = note_path.parent() {
+        fs::create_dir_all(parent)
+            .map_err(|error| format!("Couldn't prepare the note folder: {error}"))?;
+    }
+
+    fs::write(note_path, "").map_err(|error| format!("Couldn't create the note file: {error}"))?;
+
+    Ok(())
+}
+
+fn atomic_write(path: &Path, contents: &str) -> Result<(), String> {
+    let parent = path
+        .parent()
+        .ok_or_else(|| "Daily couldn't locate that note folder.".to_string())?;
+
+    fs::create_dir_all(parent)
+        .map_err(|error| format!("Couldn't prepare the note folder: {error}"))?;
+
+    let file_name = path
+        .file_name()
+        .ok_or_else(|| "Daily couldn't name that note file.".to_string())?
+        .to_string_lossy();
+
+    let nonce = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|duration| duration.as_nanos())
+        .unwrap_or(0);
+
+    let temp_path = parent.join(format!(".{file_name}.{nonce}.tmp"));
+
+    fs::write(&temp_path, contents)
+        .map_err(|error| format!("Couldn't save today's note: {error}"))?;
+
+    fs::rename(&temp_path, path).map_err(|error| {
+        let _ = fs::remove_file(&temp_path);
+        format!("Couldn't finish saving today's note: {error}")
+    })?;
+
+    Ok(())
+}
+
 #[tauri::command(rename_all = "camelCase")]
-pub fn set_primary_folder(
-    state: State<'_, PrimaryFolderState>,
+pub fn set_notebook_folder(
+    state: State<'_, NotebookFolderState>,
     folder_path: Option<String>,
 ) -> Result<(), String> {
     let mut stored_folder = state
         .0
         .lock()
-        .map_err(|_| "Daily couldn't update the primary folder state.".to_string())?;
+        .map_err(|_| "Daily couldn't update the notebook folder state.".to_string())?;
 
     *stored_folder = match folder_path {
         Some(folder_path) => Some(ensure_folder(&folder_path)?),
@@ -100,28 +147,30 @@ pub fn set_primary_folder(
 }
 
 #[tauri::command(rename_all = "camelCase")]
-pub fn open_or_create_today_note(state: State<'_, PrimaryFolderState>) -> Result<DailyNotePayload, String> {
-    let folder = current_primary_folder(&state)?;
+pub fn open_or_create_today_note(
+    state: State<'_, NotebookFolderState>,
+) -> Result<DailyNotePayload, String> {
+    let folder = current_notebook_folder(&state)?;
     build_payload(&folder, Local::now().date_naive())
 }
 
 #[tauri::command(rename_all = "camelCase")]
 pub fn open_or_create_note_for_date(
-    state: State<'_, PrimaryFolderState>,
+    state: State<'_, NotebookFolderState>,
     date_key: String,
 ) -> Result<DailyNotePayload, String> {
-    let folder = current_primary_folder(&state)?;
+    let folder = current_notebook_folder(&state)?;
     let date = parse_date_key(&date_key)?;
     build_payload(&folder, date)
 }
 
 #[tauri::command(rename_all = "camelCase")]
 pub fn find_existing_note_dates(
-    state: State<'_, PrimaryFolderState>,
+    state: State<'_, NotebookFolderState>,
     start_date_key: String,
     end_date_key: String,
 ) -> Result<ExistingNoteDatesPayload, String> {
-    let folder = current_primary_folder(&state)?;
+    let folder = current_notebook_folder(&state)?;
     let start_date = parse_date_key(&start_date_key)?;
     let end_date = parse_date_key(&end_date_key)?;
 
@@ -149,11 +198,11 @@ pub fn find_existing_note_dates(
 
 #[tauri::command(rename_all = "camelCase")]
 pub fn save_daily_note(
-    state: State<'_, PrimaryFolderState>,
+    state: State<'_, NotebookFolderState>,
     date_key: String,
     content: String,
 ) -> Result<SaveDailyNotePayload, String> {
-    let folder = current_primary_folder(&state)?;
+    let folder = current_notebook_folder(&state)?;
     let date = parse_date_key(&date_key)?;
     let note_path = build_note_path(&folder, date);
 
@@ -161,29 +210,58 @@ pub fn save_daily_note(
         return Ok(SaveDailyNotePayload { persisted: false });
     }
 
-    if let Some(parent) = note_path.parent() {
-        fs::create_dir_all(parent)
-            .map_err(|error| format!("Couldn't prepare today's note folder: {error}"))?;
-    }
-
-    fs::write(note_path, content)
-        .map_err(|error| format!("Couldn't save today's note: {error}"))?;
+    atomic_write(&note_path, &content)?;
 
     Ok(SaveDailyNotePayload { persisted: true })
 }
 
 #[tauri::command(rename_all = "camelCase")]
-pub fn open_in_finder(state: State<'_, PrimaryFolderState>) -> Result<(), String> {
-    let folder = current_primary_folder(&state)?;
+pub fn open_note_in_default_app(
+    state: State<'_, NotebookFolderState>,
+    date_key: String,
+) -> Result<(), String> {
+    let folder = current_notebook_folder(&state)?;
+    let date = parse_date_key(&date_key)?;
+    let note_path = build_note_path(&folder, date);
+
+    ensure_note_file_exists(&note_path)?;
 
     let status = Command::new("open")
-        .arg(folder)
+        .arg(note_path)
+        .status()
+        .map_err(|error| format!("Couldn't open the note: {error}"))?;
+
+    if status.success() {
+        Ok(())
+    } else {
+        Err("Daily couldn't open that note in your default app.".to_string())
+    }
+}
+
+#[tauri::command(rename_all = "camelCase")]
+pub fn open_note_in_finder(
+    state: State<'_, NotebookFolderState>,
+    date_key: String,
+) -> Result<(), String> {
+    let folder = current_notebook_folder(&state)?;
+    let date = parse_date_key(&date_key)?;
+    let note_path = build_note_path(&folder, date);
+
+    let mut command = Command::new("open");
+
+    if note_path.exists() {
+        command.arg("-R").arg(note_path);
+    } else {
+        command.arg(folder);
+    }
+
+    let status = command
         .status()
         .map_err(|error| format!("Couldn't open Finder: {error}"))?;
 
     if status.success() {
         Ok(())
     } else {
-        Err("Finder didn't open that folder.".to_string())
+        Err("Finder didn't open that note.".to_string())
     }
 }

@@ -46,7 +46,7 @@ const twoDaysAgoKey = shiftDateKey(todayKey, -2);
 
 const templates = {
   hello:
-    "<h1>good morning,</h1><p>daily is lil menu bar app that opens your daily markdown note.</p><p>that's pretty much it</p><p>enjoy :)</p>",
+    '<h1>good morning,</h1><p>daily is a lil menubar app for quickly viewing and editing your daily markdown notes.</p><p><a class="note-download-link" data-download-link="true" contenteditable="false" href="https://github.com/hellorashid/daily/releases/latest" rel="noreferrer" target="_blank">free &amp; open source. download here.</a></p><p>enjoy :)</p>',
   quiet: "<h1>One quiet note</h1><p>open, write, close</p>",
   archive: "<h1>Always yours</h1><p>simple files, no lock-in</p>",
 };
@@ -293,6 +293,23 @@ function render() {
 noteEditor.addEventListener("input", () => {
   state.notes[state.selectedDateKey] = noteEditor.innerHTML;
   syncEditorEmptyState();
+});
+
+noteEditor.addEventListener("click", (event) => {
+  const target = event.target;
+
+  if (!(target instanceof Element)) {
+    return;
+  }
+
+  const downloadLink = target.closest("[data-download-link]");
+
+  if (!downloadLink || !(downloadLink instanceof HTMLAnchorElement)) {
+    return;
+  }
+
+  event.preventDefault();
+  window.open(downloadLink.href, "_blank", "noopener,noreferrer");
 });
 
 document.addEventListener("click", (event) => {

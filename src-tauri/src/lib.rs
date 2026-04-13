@@ -4,7 +4,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 use tauri::{
     image::Image,
-    menu::{Menu, MenuItem},
+    menu::{Menu, MenuItem, PredefinedMenuItem, Submenu},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
     ActivationPolicy, AppHandle, Manager, PhysicalPosition, PhysicalSize, Rect, Runtime,
     WindowEvent,
@@ -175,6 +175,38 @@ fn build_tray<R: Runtime>(app: &mut tauri::App<R>) -> tauri::Result<()> {
     Ok(())
 }
 
+fn build_app_menu<R: Runtime>(app_handle: &AppHandle<R>) -> tauri::Result<Menu<R>> {
+    let edit_menu = Submenu::with_items(
+        app_handle,
+        "Edit",
+        true,
+        &[
+            &PredefinedMenuItem::undo(app_handle, None)?,
+            &PredefinedMenuItem::redo(app_handle, None)?,
+            &PredefinedMenuItem::separator(app_handle)?,
+            &PredefinedMenuItem::cut(app_handle, None)?,
+            &PredefinedMenuItem::copy(app_handle, None)?,
+            &PredefinedMenuItem::paste(app_handle, None)?,
+            &PredefinedMenuItem::select_all(app_handle, None)?,
+        ],
+    )?;
+
+    #[cfg(target_os = "macos")]
+    {
+        let app_menu = Submenu::with_items(
+            app_handle,
+            app_handle.package_info().name.clone(),
+            true,
+            &[&PredefinedMenuItem::quit(app_handle, None)?],
+        )?;
+
+        return Menu::with_items(app_handle, &[&app_menu, &edit_menu]);
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    Menu::with_items(app_handle, &[&edit_menu])
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -183,15 +215,16 @@ pub fn run() {
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_store::Builder::default().build())
         .manage(AutoHideState(AtomicBool::new(true)))
-        .manage(notes::PrimaryFolderState::default())
+        .manage(notes::NotebookFolderState::default())
         .invoke_handler(tauri::generate_handler![
             set_window_auto_hide_enabled,
-            notes::set_primary_folder,
+            notes::set_notebook_folder,
             notes::open_or_create_today_note,
             notes::open_or_create_note_for_date,
             notes::find_existing_note_dates,
             notes::save_daily_note,
-            notes::open_in_finder
+            notes::open_note_in_default_app,
+            notes::open_note_in_finder
         ])
         .setup(|app| {
             #[cfg(target_os = "macos")]
@@ -207,6 +240,9 @@ pub fn run() {
 
             app.handle()
                 .plugin(tauri_plugin_updater::Builder::new().build())?;
+
+            let menu = build_app_menu(app.handle())?;
+            app.handle().set_menu(menu)?;
 
             build_tray(app)?;
 

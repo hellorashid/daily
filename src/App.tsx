@@ -3,7 +3,7 @@ import { getVersion } from '@tauri-apps/api/app'
 import { open } from '@tauri-apps/plugin-dialog'
 import { getCurrentWindow } from '@tauri-apps/api/window'
 import type { Update } from '@tauri-apps/plugin-updater'
-import { startTransition, useCallback, useEffect, useRef, useState } from 'react'
+import { startTransition, useCallback, useEffect, useEffectEvent, useRef, useState } from 'react'
 
 import './App.css'
 import { AppShell } from './components/AppShell'
@@ -17,15 +17,22 @@ import {
   shiftDateKey,
 } from './lib/dates'
 import {
-  openInFinder,
+  openCurrentNoteInDefaultApp,
+  openCurrentNoteInFinder,
   openOrCreateNoteForDate,
   openOrCreateTodayNote,
   saveDailyNote,
-  syncPrimaryFolder,
+  syncNotebookFolder,
 } from './lib/note-client'
-import { loadPrimaryFolder, persistPrimaryFolder } from './lib/store'
+import {
+  addNotebook,
+  loadNotebookSettings,
+  removeNotebook as removeNotebookFromStore,
+  setActiveNotebookId as persistActiveNotebookId,
+} from './lib/store'
 import type {
   DailyNotePayload,
+  Notebook,
   SaveState,
   Screen,
   UpdateStatus,
@@ -58,9 +65,46 @@ function getUpdateErrorMessage(error: unknown) {
   return message
 }
 
+async function copyTextToClipboard(text: string) {
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(text)
+    return
+  }
+
+  const textarea = document.createElement('textarea')
+  textarea.value = text
+  textarea.setAttribute('readonly', '')
+  textarea.style.position = 'fixed'
+  textarea.style.opacity = '0'
+  textarea.style.pointerEvents = 'none'
+  document.body.append(textarea)
+  textarea.select()
+
+  const copied = document.execCommand('copy')
+  textarea.remove()
+
+  if (!copied) {
+    throw new Error('Daily couldn’t copy that note to the clipboard.')
+  }
+}
+
+function isEditableTarget(target: EventTarget | null) {
+  if (!(target instanceof HTMLElement)) {
+    return false
+  }
+
+  if (target.isContentEditable || target.closest('[contenteditable="true"]')) {
+    return true
+  }
+
+  const tagName = target.tagName
+  return tagName === 'INPUT' || tagName === 'TEXTAREA' || tagName === 'SELECT'
+}
+
 function App() {
   const [screen, setScreen] = useState<Screen>('settings')
-  const [primaryFolder, setPrimaryFolder] = useState<string | null>(null)
+  const [notebooks, setNotebooks] = useState<Notebook[]>([])
+  const [activeNotebookId, setActiveNotebookId] = useState<string | null>(null)
   const [note, setNote] = useState<DailyNotePayload | null>(null)
   const [draft, setDraft] = useState('')
   const [lastSavedContent, setLastSavedContent] = useState('')
@@ -81,7 +125,9 @@ function App() {
   const pendingUpdateRef = useRef<Update | null>(null)
 
   const isDirty = note !== null && draft !== lastSavedContent
-  const canReturnToNote = Boolean(primaryFolder && note)
+  const activeNotebook = notebooks.find((notebook) => notebook.id === activeNotebookId) ?? null
+  const activeFolder = activeNotebook?.folderPath ?? null
+  const canReturnToNote = Boolean(activeFolder && note)
   const todayDateKey = getTodayDateKey()
   const title = note ? formatHeaderDateFromKey(note.dateKey) : formatHeaderDate()
 
@@ -100,7 +146,8 @@ function App() {
   }, [])
 
   const loadNoteForDate = useCallback(
-    async (dateKey: string) => {
+    async (dateKey: string, options?: { showNote?: boolean }) => {
+      const showNote = options?.showNote ?? true
       clearSaveTimer()
       setIsLoading(true)
       setErrorMessage(null)
@@ -108,7 +155,9 @@ function App() {
       try {
         const payload = await openOrCreateNoteForDate(dateKey)
         hydrateNote(payload)
-        setScreen('note')
+        if (showNote) {
+          setScreen('note')
+        }
       } catch (error) {
         setSaveState('error')
         setErrorMessage(getErrorMessage(error))
@@ -119,8 +168,6 @@ function App() {
     },
     [clearSaveTimer, hydrateNote],
   )
-
-  const loadTodayNote = useCallback(async () => loadNoteForDate(getTodayDateKey()), [loadNoteForDate])
 
   const flushDraft = useCallback(
     async (content: string) => {
@@ -191,19 +238,22 @@ function App() {
       setIsLoading(true)
 
       try {
-        const folder = await loadPrimaryFolder()
+        const settings = await loadNotebookSettings()
 
         if (cancelled) {
           return
         }
 
-        await syncPrimaryFolder(folder)
+        setNotebooks(settings.notebooks)
+        setActiveNotebookId(settings.activeNotebookId)
+
+        const folder = settings.notebooks.find((notebook) => notebook.id === settings.activeNotebookId)?.folderPath ?? null
+
+        await syncNotebookFolder(folder)
 
         if (cancelled) {
           return
         }
-
-        setPrimaryFolder(folder)
 
         if (!folder) {
           setScreen('settings')
@@ -265,7 +315,7 @@ function App() {
 
   useEffect(() => {
     function handleWindowFocus() {
-      if (!primaryFolder || isChoosingFolder || isLoading || isDirty || screen !== 'note') {
+      if (!activeFolder || isChoosingFolder || isLoading || isDirty || screen !== 'note') {
         return
       }
 
@@ -281,9 +331,73 @@ function App() {
     return () => {
       window.removeEventListener('focus', handleWindowFocus)
     }
-  }, [isChoosingFolder, isDirty, isLoading, loadNoteForDate, note, primaryFolder, screen])
+  }, [activeFolder, isChoosingFolder, isDirty, isLoading, loadNoteForDate, note, screen])
 
-  async function handleChooseFolder() {
+  const handleGlobalKeyDown = useEffectEvent((event: KeyboardEvent) => {
+    if (event.isComposing || isChoosingFolder) {
+      return
+    }
+
+    if (event.defaultPrevented) {
+      return
+    }
+
+    const targetIsEditable = isEditableTarget(event.target)
+    const key = event.key.toLowerCase()
+
+    if (event.metaKey && !event.shiftKey && !event.altKey && key === 'o') {
+      if (!note) {
+        return
+      }
+
+      event.preventDefault()
+      void handleOpenCurrentFile()
+      return
+    }
+
+    if (event.metaKey && event.shiftKey && !event.altKey && key === 'o') {
+      if (!note) {
+        return
+      }
+
+      event.preventDefault()
+      void handleOpenFolder()
+      return
+    }
+
+    if (
+      screen !== 'note'
+      || !activeFolder
+      || isLoading
+      || targetIsEditable
+      || event.metaKey
+      || event.ctrlKey
+      || event.altKey
+    ) {
+      return
+    }
+
+    if (event.key === 'ArrowLeft') {
+      event.preventDefault()
+      void handleNavigateDate(-1)
+      return
+    }
+
+    if (event.key === 'ArrowRight') {
+      event.preventDefault()
+      void handleNavigateDate(1)
+    }
+  })
+
+  useEffect(() => {
+    window.addEventListener('keydown', handleGlobalKeyDown, true)
+
+    return () => {
+      window.removeEventListener('keydown', handleGlobalKeyDown, true)
+    }
+  }, [])
+
+  async function handleAddNotebook() {
     if (note && isDirty) {
       const didSave = await flushDraft(draft)
 
@@ -301,7 +415,7 @@ function App() {
       const selection = await open({
         directory: true,
         multiple: false,
-        title: 'Choose your Daily notes folder',
+        title: 'Add a Daily notebook folder',
       })
 
       const folderPath = Array.isArray(selection) ? selection[0] : selection
@@ -310,10 +424,18 @@ function App() {
         return
       }
 
-      await persistPrimaryFolder(folderPath)
-      await syncPrimaryFolder(folderPath)
-      setPrimaryFolder(folderPath)
-      await loadTodayNote()
+      await syncNotebookFolder(folderPath)
+
+      const nextSettings = await addNotebook(folderPath)
+      setNotebooks(nextSettings.notebooks)
+      setActiveNotebookId(nextSettings.activeNotebookId)
+
+      const targetDateKey = note?.dateKey ?? getTodayDateKey()
+      setNote(null)
+      setDraft('')
+      setLastSavedContent('')
+      setSaveState('idle')
+      await loadNoteForDate(targetDateKey, { showNote: notebooks.length === 0 })
     } catch (error) {
       setSaveState('error')
       setErrorMessage(getErrorMessage(error))
@@ -339,13 +461,152 @@ function App() {
     setScreen('settings')
   }
 
+  async function handleSelectNotebook(notebookId: string) {
+    if (notebookId === activeNotebookId) {
+      return
+    }
+
+    const notebook = notebooks.find((entry) => entry.id === notebookId)
+    if (!notebook) {
+      return
+    }
+
+    if (note && isDirty) {
+      const didSave = await flushDraft(draft)
+
+      if (!didSave) {
+        return
+      }
+    }
+
+    setErrorMessage(null)
+
+    try {
+      await syncNotebookFolder(notebook.folderPath)
+      const nextSettings = await persistActiveNotebookId(notebookId)
+
+      setNotebooks(nextSettings.notebooks)
+      setActiveNotebookId(nextSettings.activeNotebookId)
+
+      const targetDateKey = note?.dateKey ?? getTodayDateKey()
+      setNote(null)
+      setDraft('')
+      setLastSavedContent('')
+      setSaveState('idle')
+      await loadNoteForDate(targetDateKey, { showNote: false })
+    } catch (error) {
+      setSaveState('error')
+      setErrorMessage(getErrorMessage(error))
+    }
+  }
+
+  async function handleRemoveNotebook(notebookId: string) {
+    const notebook = notebooks.find((entry) => entry.id === notebookId)
+
+    if (!notebook) {
+      return
+    }
+
+    const confirmed = window.confirm(
+      `Remove notebook "${notebook.name}"? This will not delete any files.`,
+    )
+
+    if (!confirmed) {
+      return
+    }
+
+    const previousActiveId = activeNotebookId
+
+    if (notebookId === previousActiveId && note && isDirty) {
+      const didSave = await flushDraft(draft)
+
+      if (!didSave) {
+        return
+      }
+    }
+
+    setErrorMessage(null)
+
+    try {
+      const nextSettings = await removeNotebookFromStore(notebookId)
+      setNotebooks(nextSettings.notebooks)
+      setActiveNotebookId(nextSettings.activeNotebookId)
+
+      if (nextSettings.activeNotebookId === previousActiveId) {
+        return
+      }
+
+      const nextFolder =
+        nextSettings.notebooks.find((entry) => entry.id === nextSettings.activeNotebookId)
+          ?.folderPath ?? null
+
+      await syncNotebookFolder(nextFolder)
+
+      if (!nextFolder) {
+        setNote(null)
+        setDraft('')
+        setLastSavedContent('')
+        setSaveState('idle')
+        setScreen('settings')
+        return
+      }
+
+      const targetDateKey = note?.dateKey ?? getTodayDateKey()
+      setNote(null)
+      setDraft('')
+      setLastSavedContent('')
+      setSaveState('idle')
+      await loadNoteForDate(targetDateKey, { showNote: false })
+    } catch (error) {
+      setSaveState('error')
+      setErrorMessage(getErrorMessage(error))
+    }
+  }
+
   async function handleOpenFolder() {
-    if (!primaryFolder) {
+    if (!note) {
       return
     }
 
     try {
-      await openInFinder()
+      if (isDirty) {
+        const didSave = await flushDraft(draft)
+
+        if (!didSave) {
+          return
+        }
+      }
+
+      await openCurrentNoteInFinder(note.dateKey)
+    } catch (error) {
+      setErrorMessage(getErrorMessage(error))
+    }
+  }
+
+  async function handleOpenCurrentFile() {
+    if (!note) {
+      return
+    }
+
+    try {
+      if (isDirty) {
+        const didSave = await flushDraft(draft)
+
+        if (!didSave) {
+          return
+        }
+      }
+
+      await openCurrentNoteInDefaultApp(note.dateKey)
+    } catch (error) {
+      setErrorMessage(getErrorMessage(error))
+    }
+  }
+
+  async function handleCopyContents() {
+    try {
+      await copyTextToClipboard(draft)
+      setErrorMessage(null)
     } catch (error) {
       setErrorMessage(getErrorMessage(error))
     }
@@ -449,7 +710,7 @@ function App() {
   }
 
   async function handleNavigateDate(delta: number) {
-    if (!primaryFolder || !note || isLoading) {
+    if (!activeFolder || !note || isLoading) {
       return
     }
 
@@ -471,7 +732,7 @@ function App() {
   }
 
   async function handleSelectDate(dateKey: string) {
-    if (!primaryFolder || isLoading || screen === 'settings') {
+    if (!activeFolder || isLoading || screen === 'settings') {
       return
     }
 
@@ -501,19 +762,21 @@ function App() {
             : 'Installing update…'
           : 'Check for updates'
 
-  const updateSummary =
-    updateStatus.message
-    ?? 'GitHub Releases will power in-app updates after the first published release.'
+  const updateSummary = updateStatus.message
 
   return (
     <AppShell
+      calendarSourceKey={activeNotebookId ?? 'default'}
       currentDateKey={note?.dateKey ?? todayDateKey}
-      disableFolderAction={!primaryFolder}
-      disableDatePicker={!primaryFolder || isLoading || screen === 'settings'}
+      disableDatePicker={!activeFolder || isLoading || screen === 'settings'}
+      disableNoteActions={!note || isLoading}
       disableNavigation={!note || isLoading || screen === 'settings'}
       disableNextNavigation={!note || note.dateKey >= todayDateKey}
       isSettingsOpen={screen === 'settings'}
       maxDateKey={todayDateKey}
+      onCopyContents={() => {
+        void handleCopyContents()
+      }}
       onDateSelect={(dateKey) => {
         void handleSelectDate(dateKey)
       }}
@@ -523,7 +786,10 @@ function App() {
       onNavigatePrevious={() => {
         void handleNavigateDate(-1)
       }}
-      onOpenFolder={() => {
+      onOpenCurrentFile={() => {
+        void handleOpenCurrentFile()
+      }}
+      onOpenInFinder={() => {
         void handleOpenFolder()
       }}
       onSettingsToggle={handleSettingsToggle}
@@ -532,12 +798,19 @@ function App() {
       {screen === 'settings' ? (
         <SettingsView
           appVersion={appVersion}
-          currentFolder={primaryFolder}
+          activeNotebookId={activeNotebookId}
           errorMessage={errorMessage}
           fileNamePreview={getTodayFileName()}
           isChoosingFolder={isChoosingFolder}
           isUpdateActionDisabled={updateStatus.state === 'checking' || updateStatus.state === 'downloading'}
-          onChooseFolder={handleChooseFolder}
+          notebooks={notebooks}
+          onAddNotebook={handleAddNotebook}
+          onRemoveNotebook={(notebookId) => {
+            void handleRemoveNotebook(notebookId)
+          }}
+          onSelectNotebook={(notebookId) => {
+            void handleSelectNotebook(notebookId)
+          }}
           onUpdateAction={() => {
             void handleUpdateAction()
           }}

@@ -9,43 +9,51 @@ import {
 import { CalendarPopover } from './CalendarPopover'
 
 type AppShellProps = {
+  calendarSourceKey: string
   children: ReactNode
   currentDateKey: string
-  disableFolderAction: boolean
   disableDatePicker: boolean
+  disableNoteActions: boolean
   disableNavigation: boolean
   disableNextNavigation: boolean
   isSettingsOpen: boolean
   maxDateKey: string
+  onCopyContents: () => void
   onDateSelect: (dateKey: string) => void
   onNavigateNext: () => void
   onNavigatePrevious: () => void
-  onOpenFolder: () => void
+  onOpenCurrentFile: () => void
+  onOpenInFinder: () => void
   onSettingsToggle: () => void
   title: string
 }
 
 export function AppShell({
+  calendarSourceKey,
   children,
   currentDateKey,
-  disableFolderAction,
   disableDatePicker,
+  disableNoteActions,
   disableNavigation,
   disableNextNavigation,
   isSettingsOpen,
   maxDateKey,
+  onCopyContents,
   onDateSelect,
   onNavigateNext,
   onNavigatePrevious,
-  onOpenFolder,
+  onOpenCurrentFile,
+  onOpenInFinder,
   onSettingsToggle,
   title,
 }: AppShellProps) {
   const datePickerRef = useRef<HTMLDivElement | null>(null)
+  const noteActionsRef = useRef<HTMLDivElement | null>(null)
   const [isCalendarOpen, setIsCalendarOpen] = useState(false)
+  const [isNoteActionsOpen, setIsNoteActionsOpen] = useState(false)
 
   useEffect(() => {
-    if (!isCalendarOpen) {
+    if (!isCalendarOpen && !isNoteActionsOpen) {
       return
     }
 
@@ -59,28 +67,25 @@ export function AppShell({
       if (!datePickerRef.current?.contains(target)) {
         setIsCalendarOpen(false)
       }
-    }
 
-    function handleKeyDown(event: KeyboardEvent) {
-      if (event.key === 'Escape') {
-        setIsCalendarOpen(false)
+      if (!noteActionsRef.current?.contains(target)) {
+        setIsNoteActionsOpen(false)
       }
     }
 
     function handleWindowBlur() {
       setIsCalendarOpen(false)
+      setIsNoteActionsOpen(false)
     }
 
     window.addEventListener('pointerdown', handlePointerDown, true)
-    window.addEventListener('keydown', handleKeyDown)
     window.addEventListener('blur', handleWindowBlur)
 
     return () => {
       window.removeEventListener('pointerdown', handlePointerDown, true)
-      window.removeEventListener('keydown', handleKeyDown)
       window.removeEventListener('blur', handleWindowBlur)
     }
-  }, [isCalendarOpen])
+  }, [isCalendarOpen, isNoteActionsOpen])
 
   useEffect(() => {
     if (disableDatePicker && isCalendarOpen) {
@@ -95,8 +100,21 @@ export function AppShell({
   }, [disableDatePicker, isCalendarOpen])
 
   useEffect(() => {
+    if (disableNoteActions && isNoteActionsOpen) {
+      const frame = window.requestAnimationFrame(() => {
+        setIsNoteActionsOpen(false)
+      })
+
+      return () => {
+        window.cancelAnimationFrame(frame)
+      }
+    }
+  }, [disableNoteActions, isNoteActionsOpen])
+
+  useEffect(() => {
     const frame = window.requestAnimationFrame(() => {
       setIsCalendarOpen(false)
+      setIsNoteActionsOpen(false)
     })
 
     return () => {
@@ -109,7 +127,31 @@ export function AppShell({
       return
     }
 
+    setIsNoteActionsOpen(false)
     setIsCalendarOpen((current) => !current)
+  }
+
+  function handleToggleNoteActions() {
+    if (disableNoteActions) {
+      return
+    }
+
+    setIsCalendarOpen(false)
+    setIsNoteActionsOpen((current) => !current)
+  }
+
+  function handleOpenCurrentFileClick() {
+    if (disableNoteActions) {
+      return
+    }
+
+    setIsNoteActionsOpen(false)
+    onOpenCurrentFile()
+  }
+
+  function handleNoteAction(action: () => void) {
+    setIsNoteActionsOpen(false)
+    action()
   }
 
   return (
@@ -172,6 +214,7 @@ export function AppShell({
 
               {isCalendarOpen ? (
                 <CalendarPopover
+                  dataSourceKey={calendarSourceKey}
                   maxDateKey={maxDateKey}
                   onClose={() => {
                     setIsCalendarOpen(false)
@@ -202,23 +245,98 @@ export function AppShell({
           </div>
           <h1 className="header-title">{title}</h1>
           <div className="header-side header-side-right">
-            <button
-              aria-label="Open folder in Finder"
-              className="header-icon"
-              disabled={disableFolderAction}
-              onClick={onOpenFolder}
-              type="button"
+            <div
+              className="header-menu-wrap"
+              onPointerDown={(event: ReactPointerEvent<HTMLDivElement>) => {
+                event.stopPropagation()
+              }}
+              ref={noteActionsRef}
             >
-              <svg aria-hidden="true" viewBox="0 0 24 24">
-                <path
-                  d="M3.5 7.5h5l1.6 2H20a.5.5 0 0 1 .5.5v7.5a1 1 0 0 1-1 1H4.5a1 1 0 0 1-1-1v-9a1 1 0 0 1 1-1Z"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeLinejoin="round"
-                  strokeWidth="1.5"
-                />
-              </svg>
-            </button>
+              <div className={`header-split-button${isNoteActionsOpen ? ' active' : ''}${disableNoteActions ? ' disabled' : ''}`}>
+                <button
+                  aria-label="Open current note in default app"
+                  className="header-split-button-primary"
+                  disabled={disableNoteActions}
+                  onClick={handleOpenCurrentFileClick}
+                  type="button"
+                >
+                  <span className="header-split-button-mark">
+                    <svg aria-hidden="true" viewBox="0 0 24 24">
+                      <path
+                        d="M7.5 4.5h6.1l3 3v10a2 2 0 0 1-2 2h-7.1a2 2 0 0 1-2-2v-11a2 2 0 0 1 2-2Z"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth="1.45"
+                      />
+                      <path
+                        d="M13.6 4.5v3.1h3.1"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth="1.45"
+                      />
+                    </svg>
+                  </span>
+                </button>
+                <button
+                  aria-expanded={isNoteActionsOpen}
+                  aria-label="Open note actions"
+                  className="header-split-button-toggle"
+                  disabled={disableNoteActions}
+                  onClick={handleToggleNoteActions}
+                  type="button"
+                >
+                  <svg aria-hidden="true" viewBox="0 0 24 24">
+                    <path
+                      d="m7.5 9.5 4.5 5 4.5-5"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth="1.6"
+                    />
+                  </svg>
+                </button>
+              </div>
+
+              {isNoteActionsOpen ? (
+                <div className="header-menu-dropdown" role="menu">
+                  <button
+                    className="header-menu-item"
+                    onClick={() => {
+                      handleNoteAction(onOpenCurrentFile)
+                    }}
+                    role="menuitem"
+                    type="button"
+                  >
+                    Open in Default App
+                  </button>
+                  <button
+                    className="header-menu-item"
+                    onClick={() => {
+                      handleNoteAction(onOpenInFinder)
+                    }}
+                    role="menuitem"
+                    type="button"
+                  >
+                    Open in Finder
+                  </button>
+                  <button
+                    className="header-menu-item"
+                    onClick={() => {
+                      handleNoteAction(onCopyContents)
+                    }}
+                    role="menuitem"
+                    type="button"
+                  >
+                    Copy Contents
+                  </button>
+                </div>
+              ) : null}
+            </div>
             <button
               aria-label={isSettingsOpen ? 'Return to note' : 'Open settings'}
               className={`header-icon${isSettingsOpen ? ' active' : ''}`}

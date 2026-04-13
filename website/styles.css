@@ -637,6 +637,18 @@ button {
 
 .note-editor a {
   color: inherit;
+  text-decoration-color: rgba(24, 24, 24, 0.28);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.16em;
+}
+
+.note-editor .note-download-link {
+  font-weight: 500;
+  text-decoration-color: rgba(24, 24, 24, 0.64);
+}
+
+.note-editor .note-download-link:hover {
+  text-decoration-color: currentColor;
 }
 
 @media (max-width: 860px) {

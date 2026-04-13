@@ -12,6 +12,7 @@ import {
 import { findExistingNoteDates } from '../lib/note-client'
 
 type CalendarPopoverProps = {
+  dataSourceKey: string
   maxDateKey: string
   onClose: () => void
   onSelect: (dateKey: string) => void
@@ -21,6 +22,7 @@ type CalendarPopoverProps = {
 const weekdayLabels = ['S', 'M', 'T', 'W', 'T', 'F', 'S']
 
 export function CalendarPopover({
+  dataSourceKey,
   maxDateKey,
   onClose,
   onSelect,
@@ -53,6 +55,7 @@ export function CalendarPopover({
     let cancelled = false
 
     async function loadExistingDates() {
+      setExistingDateKeys(new Set())
       const startDateKey = toDateKey(days[0])
       const endDateKey = toDateKey(days[days.length - 1])
 
@@ -74,7 +77,7 @@ export function CalendarPopover({
     return () => {
       cancelled = true
     }
-  }, [days])
+  }, [dataSourceKey, days])
 
   return (
     <div

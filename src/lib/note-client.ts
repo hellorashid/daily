@@ -6,8 +6,8 @@ import type {
   SaveDailyNotePayload,
 } from './types'
 
-export function syncPrimaryFolder(folderPath: string | null) {
-  return invoke('set_primary_folder', { folderPath })
+export function syncNotebookFolder(folderPath: string | null) {
+  return invoke('set_notebook_folder', { folderPath })
 }
 
 export function openOrCreateTodayNote() {
@@ -22,8 +22,12 @@ export function saveDailyNote(dateKey: string, content: string) {
   return invoke<SaveDailyNotePayload>('save_daily_note', { dateKey, content })
 }
 
-export function openInFinder() {
-  return invoke('open_in_finder')
+export function openCurrentNoteInDefaultApp(dateKey: string) {
+  return invoke('open_note_in_default_app', { dateKey })
+}
+
+export function openCurrentNoteInFinder(dateKey: string) {
+  return invoke('open_note_in_finder', { dateKey })
 }
 
 export function findExistingNoteDates(startDateKey: string, endDateKey: string) {
