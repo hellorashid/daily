@@ -5,7 +5,7 @@
 <h1 align="center">Daily</h1>
 
 <p align="center">
-  A tiny menu bar / tray notebook.
+  A tiny menubar notebook.
   <br />
   One plain Markdown file per day, stored in folders you choose.
 </p>
@@ -20,7 +20,7 @@
 
 ## What it does
 
-- Lives in your menu bar / system tray and opens as a compact panel.
+- Lives in your menubar and opens as a compact panel.
 - Each day is a `YYYY-MM-DD.md` file.
 - Notes autosave while you type.
 - Add multiple notebook folders and switch between them.
