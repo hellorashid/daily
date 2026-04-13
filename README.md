@@ -11,6 +11,11 @@
 </p>
 
 <p align="center">
+  <strong>Beta:</strong> Daily is beta software and might contain bugs. If you run into anything, please DM me on Twitter
+  <a href="https://x.com/razberrychai">@razberrychai</a>.
+</p>
+
+<p align="center">
   <a href="https://github.com/hellorashid/daily/releases/latest">Download</a>
 </p>
 
