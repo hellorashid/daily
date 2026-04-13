@@ -5,7 +5,7 @@
 <h1 align="center">Daily</h1>
 
 <p align="center">
-  A tiny macOS menu bar notebook.
+  A tiny menu bar / tray notebook.
   <br />
   One plain Markdown file per day, stored in folders you choose.
 </p>
@@ -20,12 +20,12 @@
 
 ## What it does
 
-- Lives in your menu bar and opens as a compact panel.
+- Lives in your menu bar / system tray and opens as a compact panel.
 - Each day is a `YYYY-MM-DD.md` file.
 - Notes autosave while you type.
 - Add multiple notebook folders and switch between them.
 - Navigate by arrows or calendar (with indicators for days that already have a note).
-- Open the current file in your default editor, reveal it in Finder, or copy the contents.
+- Open the current file in your default editor, reveal it in your file manager, or copy the contents.
 
 ## Markdown
 
