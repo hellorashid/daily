@@ -29,6 +29,7 @@ export function NoteView({ draft, errorMessage, isLoading, note, onBlur, onChang
             className="ink-editor-host"
             documentKey={note?.filePath ?? 'daily-note'}
             isLoading={isLoading || note === null}
+            key={note?.filePath ?? 'daily-note'}
             onBlur={onBlur}
             onChange={onChange}
             value={draft}
