@@ -134,8 +134,8 @@ class TaskMarkerWidget extends WidgetType {
     const button = document.createElement('button')
     button.type = 'button'
     button.className = 'cm-preview-task-toggle'
+    button.tabIndex = -1
     button.setAttribute('aria-label', this.isChecked ? 'Mark task incomplete' : 'Mark task complete')
-    button.setAttribute('aria-checked', String(this.isChecked))
 
     if (this.isChecked) {
       button.classList.add('is-checked')
@@ -187,29 +187,35 @@ const previewQuoteLine = getLineClassDecoration('cm-preview-quote-line')
 function buildLineDecorations(
   builder: RangeSetBuilder<Decoration>,
   view: EditorView,
+  activeLines: Set<number>,
 ) {
   for (const visibleRange of view.visibleRanges) {
     let position = visibleRange.from
 
     while (position <= visibleRange.to) {
       const line = view.state.doc.lineAt(position)
+      const isActiveLine = activeLines.has(line.number)
 
       if (/^\s*<\/?br\s*\/?>\s*$/i.test(line.text)) {
-        builder.add(line.from, line.from, hiddenHtmlBreakLine)
-        builder.add(line.from, line.to, hiddenHtmlBreak)
+        if (!isActiveLine) {
+          builder.add(line.from, line.from, hiddenHtmlBreakLine)
+          builder.add(line.from, line.to, hiddenHtmlBreak)
+        }
         position = line.to + 1
         continue
       }
 
       if (/^\s*(?:-{3,}|\*{3,}|_{3,}|(?:-\s+){2,}-?|(?:\*\s+){2,}\*?|(?:_\s+){2,}_?)\s*$/.test(line.text)) {
         builder.add(line.from, line.from, previewDividerLine)
-        builder.add(
-          line.from,
-          line.to,
-          Decoration.replace({
-            widget: new DividerWidget(),
-          }),
-        )
+        if (!isActiveLine) {
+          builder.add(
+            line.from,
+            line.to,
+            Decoration.replace({
+              widget: new DividerWidget(),
+            }),
+          )
+        }
         position = line.to + 1
         continue
       }
@@ -228,18 +234,22 @@ function buildLineDecorations(
             `cm-preview-heading cm-preview-heading-${headingMatch[2].length}`,
           ),
         )
-        builder.add(markerStart, markerEnd, hiddenStructuralMark)
+        if (!isActiveLine) {
+          builder.add(markerStart, markerEnd, hiddenStructuralMark)
+        }
       }
 
       const quoteMatch = line.text.match(/^(\s*(?:>\s*)+)/)
 
       if (quoteMatch) {
         builder.add(line.from, line.from, previewQuoteLine)
-        builder.add(
-          line.from,
-          line.from + quoteMatch[1].length,
-          hiddenStructuralMark,
-        )
+        if (!isActiveLine) {
+          builder.add(
+            line.from,
+            line.from + quoteMatch[1].length,
+            hiddenStructuralMark,
+          )
+        }
       }
 
       const taskMatch = line.text.match(/^(\s*)[-*]\s+\[( |x|X)\](\s+)/)
@@ -257,17 +267,19 @@ function buildLineDecorations(
               : 'cm-preview-task-line',
           ),
         )
-        builder.add(
-          line.from,
-          line.from + prefixText.length,
-          Decoration.replace({
-            widget: new TaskMarkerWidget(
-              taskMatch[1].length,
-              taskMatch[2].toLowerCase() === 'x',
-              checkboxPosition,
-            ),
-          }),
-        )
+        if (!isActiveLine) {
+          builder.add(
+            line.from,
+            line.from + prefixText.length,
+            Decoration.replace({
+              widget: new TaskMarkerWidget(
+                taskMatch[1].length,
+                taskMatch[2].toLowerCase() === 'x',
+                checkboxPosition,
+              ),
+            }),
+          )
+        }
       } else {
         const bulletMatch = line.text.match(/^(\s*)[-*]\s+/)
 
@@ -277,13 +289,15 @@ function buildLineDecorations(
             line.from,
             getLineClassDecoration('cm-preview-list-line'),
           )
-          builder.add(
-            line.from,
-            line.from + bulletMatch[0].length,
-            Decoration.replace({
-              widget: new BulletMarkerWidget(bulletMatch[1].length),
-            }),
-          )
+          if (!isActiveLine) {
+            builder.add(
+              line.from,
+              line.from + bulletMatch[0].length,
+              Decoration.replace({
+                widget: new BulletMarkerWidget(bulletMatch[1].length),
+              }),
+            )
+          }
         }
 
         const numberMatch = line.text.match(/^(\s*)(\d+\.)\s+/)
@@ -294,16 +308,18 @@ function buildLineDecorations(
             line.from,
             getLineClassDecoration('cm-preview-list-line'),
           )
-          builder.add(
-            line.from,
-            line.from + numberMatch[0].length,
-            Decoration.replace({
-              widget: new NumberMarkerWidget(
-                numberMatch[1].length,
-                numberMatch[2],
-              ),
-            }),
-          )
+          if (!isActiveLine) {
+            builder.add(
+              line.from,
+              line.from + numberMatch[0].length,
+              Decoration.replace({
+                widget: new NumberMarkerWidget(
+                  numberMatch[1].length,
+                  numberMatch[2],
+                ),
+              }),
+            )
+          }
         }
       }
 
@@ -342,7 +358,7 @@ function buildMarkdownPresentationDecorations(view: EditorView): DecorationSet {
   const builder = new RangeSetBuilder<Decoration>()
   const activeLines = getActiveLineNumbers(view)
 
-  buildLineDecorations(builder, view)
+  buildLineDecorations(builder, view, activeLines)
   buildInlineDecorations(builder, view, activeLines)
 
   return builder.finish()
