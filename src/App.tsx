@@ -26,18 +26,39 @@ import {
 } from './lib/note-client'
 import {
   addNotebook,
+  getCachedAppearanceSetting,
+  getCachedWindowOpenShortcutEnabledSetting,
+  getCachedWindowOpenShortcutSetting,
+  loadAppearanceSetting,
   loadNotebookSettings,
+  loadWindowOpenShortcutEnabledSetting,
+  loadWindowOpenShortcutSetting,
+  persistAppearanceSetting,
+  persistWindowOpenShortcutEnabledSetting,
+  persistWindowOpenShortcutSetting,
   removeNotebook as removeNotebookFromStore,
   setActiveNotebookId as persistActiveNotebookId,
 } from './lib/store'
+import {
+  DEFAULT_WINDOW_OPEN_SHORTCUT,
+  WINDOW_OPEN_SHORTCUT_DISABLED,
+} from './lib/shortcuts'
 import type {
+  AppearanceSetting,
   DailyNotePayload,
   Notebook,
+  ResolvedTheme,
   SaveState,
   Screen,
   UpdateStatus,
+  WindowOpenShortcutSetting,
 } from './lib/types'
+import { getSystemResolvedTheme } from './lib/theme'
 import { checkForAppUpdate, installAppUpdate } from './lib/updater-client'
+import {
+  getWindowOpenShortcutStatus,
+  setWindowOpenShortcut,
+} from './lib/window-client'
 
 function getErrorMessage(error: unknown) {
   if (error instanceof Error && error.message) {
@@ -104,6 +125,15 @@ function isEditableTarget(target: EventTarget | null) {
 const UPDATE_CHECK_COOLDOWN_MS = 60 * 1000
 
 function App() {
+  const [appearance, setAppearance] = useState<AppearanceSetting>(
+    () => getCachedAppearanceSetting() ?? 'light',
+  )
+  const [windowOpenShortcut, setWindowOpenShortcutSetting] = useState<WindowOpenShortcutSetting>(
+    () => getCachedWindowOpenShortcutSetting() ?? DEFAULT_WINDOW_OPEN_SHORTCUT,
+  )
+  const [isWindowOpenShortcutEnabled, setIsWindowOpenShortcutEnabled] = useState<boolean>(
+    () => getCachedWindowOpenShortcutEnabledSetting() ?? true,
+  )
   const [screen, setScreen] = useState<Screen>('settings')
   const [notebooks, setNotebooks] = useState<Notebook[]>([])
   const [activeNotebookId, setActiveNotebookId] = useState<string | null>(null)
@@ -115,6 +145,9 @@ function App() {
   const [isLoading, setIsLoading] = useState(true)
   const [isChoosingFolder, setIsChoosingFolder] = useState(false)
   const [appVersion, setAppVersion] = useState<string | null>(null)
+  const [systemTheme, setSystemTheme] = useState<ResolvedTheme>(() => getSystemResolvedTheme())
+  const [isWindowOpenShortcutUpdating, setIsWindowOpenShortcutUpdating] = useState(false)
+  const [windowOpenShortcutErrorMessage, setWindowOpenShortcutErrorMessage] = useState<string | null>(null)
   const [updateStatus, setUpdateStatus] = useState<UpdateStatus>({
     message: null,
     progress: null,
@@ -134,7 +167,17 @@ function App() {
   const activeFolder = activeNotebook?.folderPath ?? null
   const canReturnToNote = Boolean(activeFolder && note)
   const todayDateKey = getTodayDateKey()
-  const title = note ? formatHeaderDateFromKey(note.dateKey) : formatHeaderDate()
+  const isSettingsScreen = screen === 'settings'
+  const isNoteActionsDisabled = !note || isLoading || isSettingsScreen
+  const isDatePickerDisabled = !activeFolder || isLoading || isSettingsScreen
+  const isNavigationDisabled = !note || isLoading || isSettingsScreen
+  const title =
+    isSettingsScreen
+      ? 'Settings'
+      : note
+        ? formatHeaderDateFromKey(note.dateKey)
+        : formatHeaderDate()
+  const resolvedTheme: ResolvedTheme = appearance === 'system' ? systemTheme : appearance
 
   const clearSaveTimer = useCallback(() => {
     if (saveTimerRef.current !== null) {
@@ -243,6 +286,47 @@ function App() {
       setIsLoading(true)
 
       try {
+        const cachedAppearance = getCachedAppearanceSetting()
+        if (!cachedAppearance) {
+          const nextAppearance = await loadAppearanceSetting()
+
+          if (cancelled) {
+            return
+          }
+
+          setAppearance(nextAppearance)
+        }
+
+        const cachedWindowOpenShortcut = getCachedWindowOpenShortcutSetting()
+        if (!cachedWindowOpenShortcut) {
+          const nextWindowOpenShortcut = await loadWindowOpenShortcutSetting()
+
+          if (cancelled) {
+            return
+          }
+
+          setWindowOpenShortcutSetting(nextWindowOpenShortcut)
+        }
+
+        const cachedWindowOpenShortcutEnabled = getCachedWindowOpenShortcutEnabledSetting()
+        if (cachedWindowOpenShortcutEnabled === null) {
+          const nextWindowOpenShortcutEnabled = await loadWindowOpenShortcutEnabledSetting()
+
+          if (cancelled) {
+            return
+          }
+
+          setIsWindowOpenShortcutEnabled(nextWindowOpenShortcutEnabled)
+        }
+
+        const windowOpenShortcutStatus = await getWindowOpenShortcutStatus()
+
+        if (cancelled) {
+          return
+        }
+
+        setWindowOpenShortcutErrorMessage(windowOpenShortcutStatus.registrationError)
+
         const settings = await loadNotebookSettings()
 
         if (cancelled) {
@@ -295,6 +379,38 @@ function App() {
       clearSaveTimer()
     }
   }, [clearSaveTimer, hydrateNote])
+
+  useEffect(() => {
+    if (appearance !== 'system' || typeof window.matchMedia !== 'function') {
+      return
+    }
+
+    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)')
+
+    function handleChange(event: MediaQueryListEvent) {
+      setSystemTheme(event.matches ? 'dark' : 'light')
+    }
+
+    setSystemTheme(mediaQuery.matches ? 'dark' : 'light')
+
+    if (typeof mediaQuery.addEventListener === 'function') {
+      mediaQuery.addEventListener('change', handleChange)
+
+      return () => {
+        mediaQuery.removeEventListener('change', handleChange)
+      }
+    }
+
+    mediaQuery.addListener(handleChange)
+
+    return () => {
+      mediaQuery.removeListener(handleChange)
+    }
+  }, [appearance])
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = resolvedTheme
+  }, [resolvedTheme])
 
   useEffect(() => {
     if (!note || !isDirty) {
@@ -417,6 +533,19 @@ function App() {
       return
     }
 
+    if (
+      event.key === 'Escape'
+      && !event.metaKey
+      && !event.ctrlKey
+      && !event.altKey
+      && !event.shiftKey
+      && document.documentElement.dataset.windowOpenShortcutRecording !== 'true'
+    ) {
+      event.preventDefault()
+      void invoke('hide_main_window').catch(() => null)
+      return
+    }
+
     if (event.defaultPrevented) {
       return
     }
@@ -425,7 +554,7 @@ function App() {
     const key = event.key.toLowerCase()
 
     if (event.metaKey && !event.shiftKey && !event.altKey && key === 'o') {
-      if (!note) {
+      if (isNoteActionsDisabled) {
         return
       }
 
@@ -435,7 +564,7 @@ function App() {
     }
 
     if (event.metaKey && event.shiftKey && !event.altKey && key === 'o') {
-      if (!note) {
+      if (isNoteActionsDisabled) {
         return
       }
 
@@ -469,10 +598,10 @@ function App() {
   })
 
   useEffect(() => {
-    window.addEventListener('keydown', handleGlobalKeyDown, true)
+    document.addEventListener('keydown', handleGlobalKeyDown, true)
 
     return () => {
-      window.removeEventListener('keydown', handleGlobalKeyDown, true)
+      document.removeEventListener('keydown', handleGlobalKeyDown, true)
     }
   }, [])
 
@@ -538,6 +667,83 @@ function App() {
     }
 
     setScreen('settings')
+  }
+
+  async function handleAppearanceChange(nextAppearance: AppearanceSetting) {
+    if (nextAppearance === appearance) {
+      return
+    }
+
+    const previousAppearance = appearance
+
+    setAppearance(nextAppearance)
+
+    try {
+      await persistAppearanceSetting(nextAppearance)
+      setErrorMessage(null)
+    } catch (error) {
+      setAppearance(previousAppearance)
+      setErrorMessage(getErrorMessage(error))
+    }
+  }
+
+  async function handleWindowOpenShortcutChange(nextShortcut: WindowOpenShortcutSetting) {
+    if (
+      nextShortcut === windowOpenShortcut
+        || isWindowOpenShortcutUpdating
+    ) {
+      return true
+    }
+
+    setIsWindowOpenShortcutUpdating(true)
+
+    try {
+      if (isWindowOpenShortcutEnabled) {
+        await setWindowOpenShortcut(nextShortcut)
+      }
+
+      await persistWindowOpenShortcutSetting(nextShortcut)
+      setWindowOpenShortcutSetting(nextShortcut)
+      setWindowOpenShortcutErrorMessage(null)
+      setErrorMessage(null)
+      return true
+    } catch (error) {
+      if (isWindowOpenShortcutEnabled) {
+        await setWindowOpenShortcut(windowOpenShortcut).catch(() => null)
+      }
+
+      setWindowOpenShortcutErrorMessage(getErrorMessage(error))
+      return false
+    } finally {
+      setIsWindowOpenShortcutUpdating(false)
+    }
+  }
+
+  async function handleWindowOpenShortcutEnabledChange(nextEnabled: boolean) {
+    if (nextEnabled === isWindowOpenShortcutEnabled || isWindowOpenShortcutUpdating) {
+      return true
+    }
+
+    setIsWindowOpenShortcutUpdating(true)
+
+    try {
+      await setWindowOpenShortcut(
+        nextEnabled ? windowOpenShortcut : WINDOW_OPEN_SHORTCUT_DISABLED,
+      )
+      await persistWindowOpenShortcutEnabledSetting(nextEnabled)
+      setIsWindowOpenShortcutEnabled(nextEnabled)
+      setWindowOpenShortcutErrorMessage(null)
+      setErrorMessage(null)
+      return true
+    } catch (error) {
+      await setWindowOpenShortcut(
+        isWindowOpenShortcutEnabled ? windowOpenShortcut : WINDOW_OPEN_SHORTCUT_DISABLED,
+      ).catch(() => null)
+      setWindowOpenShortcutErrorMessage(getErrorMessage(error))
+      return false
+    } finally {
+      setIsWindowOpenShortcutUpdating(false)
+    }
   }
 
   async function handleSelectNotebook(notebookId: string) {
@@ -643,7 +849,7 @@ function App() {
   }
 
   async function handleOpenFolder() {
-    if (!note) {
+    if (isNoteActionsDisabled) {
       return
     }
 
@@ -663,7 +869,7 @@ function App() {
   }
 
   async function handleOpenCurrentFile() {
-    if (!note) {
+    if (isNoteActionsDisabled) {
       return
     }
 
@@ -693,7 +899,7 @@ function App() {
 
   async function checkForUpdates() {
     setUpdateStatus({
-      message: 'Checking GitHub Releases…',
+      message: null,
       progress: null,
       state: 'checking',
       version: null,
@@ -843,24 +1049,28 @@ function App() {
     updateStatus.state === 'available' && updateStatus.version
       ? `Install v${updateStatus.version}`
       : updateStatus.state === 'checking'
-        ? 'Checking for updates…'
+        ? 'Loading…'
         : updateStatus.state === 'downloading'
           ? updateStatus.progress !== null
             ? `Installing… ${updateStatus.progress}%`
             : 'Installing update…'
           : 'Check for updates'
 
-  const updateSummary = updateStatus.message
+  const versionStatusLabel = updateStatus.state === 'up-to-date' ? 'latest' : null
+  const updateSummary =
+    updateStatus.state === 'up-to-date' || updateStatus.state === 'checking'
+      ? null
+      : updateStatus.message
 
   return (
     <AppShell
       calendarSourceKey={activeNotebookId ?? 'default'}
       currentDateKey={note?.dateKey ?? todayDateKey}
-      disableDatePicker={!activeFolder || isLoading || screen === 'settings'}
-      disableNoteActions={!note || isLoading}
-      disableNavigation={!note || isLoading || screen === 'settings'}
+      disableDatePicker={isDatePickerDisabled}
+      disableNoteActions={isNoteActionsDisabled}
+      disableNavigation={isNavigationDisabled}
       disableNextNavigation={!note || note.dateKey >= todayDateKey}
-      isSettingsOpen={screen === 'settings'}
+      isSettingsOpen={isSettingsScreen}
       maxDateKey={todayDateKey}
       onCopyContents={() => {
         void handleCopyContents()
@@ -885,14 +1095,21 @@ function App() {
     >
       {screen === 'settings' ? (
         <SettingsView
+          appearance={appearance}
           appVersion={appVersion}
           activeNotebookId={activeNotebookId}
           errorMessage={errorMessage}
           fileNamePreview={getTodayFileName()}
           isChoosingFolder={isChoosingFolder}
+          isWindowOpenShortcutEnabled={isWindowOpenShortcutEnabled}
+          isWindowOpenShortcutUpdating={isWindowOpenShortcutUpdating}
+          isUpdateChecking={updateStatus.state === 'checking'}
           isUpdateActionDisabled={updateStatus.state === 'checking' || updateStatus.state === 'downloading'}
           notebooks={notebooks}
           onAddNotebook={handleAddNotebook}
+          onAppearanceChange={(nextAppearance) => {
+            void handleAppearanceChange(nextAppearance)
+          }}
           onRemoveNotebook={(notebookId) => {
             void handleRemoveNotebook(notebookId)
           }}
@@ -902,28 +1119,34 @@ function App() {
           onUpdateAction={() => {
             void handleUpdateAction()
           }}
+          onWindowOpenShortcutEnabledChange={handleWindowOpenShortcutEnabledChange}
+          onWindowOpenShortcutChange={handleWindowOpenShortcutChange}
           updateStatusLabel={updateStatusLabel}
           updateSummary={updateSummary}
+          versionStatusLabel={versionStatusLabel}
+          windowOpenShortcutErrorMessage={windowOpenShortcutErrorMessage}
+          windowOpenShortcut={windowOpenShortcut}
         />
-	      ) : (
-	        <NoteView
-	          draft={draft}
-	          errorMessage={saveState === 'error' ? errorMessage : null}
+      ) : (
+        <NoteView
+          draft={draft}
+          errorMessage={saveState === 'error' ? errorMessage : null}
           isLoading={isLoading}
           note={note}
           onBlur={() => {
             if (isDirty) {
               void flushDraft(draft)
             }
-	          }}
-	          onChange={(value) => {
-	            setDraft(value)
-	            setSaveState('idle')
-	          }}
-	        />
-	      )}
-	    </AppShell>
-	  )
+          }}
+          onChange={(value) => {
+            setDraft(value)
+            setSaveState('idle')
+          }}
+          theme={resolvedTheme}
+        />
+      )}
+    </AppShell>
+  )
 }
 
 export default App

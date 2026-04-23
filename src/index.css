@@ -4,8 +4,71 @@
   --canvas: #f6f4f0;
   --panel: #fbf9f5;
   --panel-border: rgba(24, 24, 24, 0.08);
+  --panel-header: rgba(251, 249, 245, 0.98);
+  --panel-elevated: rgba(251, 249, 245, 0.98);
   --editor: #fbf9f5;
   --accent: #181818;
+  --accent-ink: rgba(251, 249, 245, 0.98);
+  --hover: rgba(33, 33, 33, 0.05);
+  --hover-strong: rgba(33, 33, 33, 0.08);
+  --hover-soft: rgba(24, 24, 24, 0.03);
+  --surface-soft: rgba(24, 24, 24, 0.04);
+  --surface-softer: rgba(24, 24, 24, 0.02);
+  --surface-subtle: rgba(24, 24, 24, 0.015);
+  --surface-tint: rgba(24, 24, 24, 0.06);
+  --interactive-border: rgba(24, 24, 24, 0.1);
+  --menu-shadow: 0 18px 34px rgba(24, 24, 24, 0.12);
+  --popover-shadow: 0 16px 36px rgba(24, 24, 24, 0.12);
+  --tooltip-shadow: 0 12px 24px rgba(24, 24, 24, 0.08);
+  --calendar-note-indicator: rgba(24, 24, 24, 0.44);
+  --calendar-outside-month: #a8a099;
+  --calendar-today-ring: rgba(24, 24, 24, 0.16);
+  --calendar-selected-bg: rgba(24, 24, 24, 0.92);
+  --calendar-selected-ink: rgba(251, 249, 245, 0.98);
+  --calendar-selected-indicator: rgba(251, 249, 245, 0.72);
+  --danger-ink: #8b3a33;
+  --danger-bg: rgba(139, 58, 51, 0.05);
+  --editor-link-underline: rgba(24, 24, 24, 0.14);
+  --editor-selection: rgba(24, 24, 24, 0.12);
+  --editor-task-border: rgba(24, 24, 24, 0.2);
+  --editor-task-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.3);
+  --editor-task-checked-border: rgba(24, 24, 24, 0.52);
+  --editor-task-checked-bg: rgba(24, 24, 24, 0.92);
+  --editor-task-checked-mark: rgba(251, 249, 245, 0.96);
+  --editor-quote-border: rgba(24, 24, 24, 0.12);
+  --editor-divider: linear-gradient(
+    90deg,
+    rgba(24, 24, 24, 0.04) 0%,
+    rgba(24, 24, 24, 0.16) 18%,
+    rgba(24, 24, 24, 0.16) 82%,
+    rgba(24, 24, 24, 0.04) 100%
+  );
+  --onboarding-tint-a: rgba(24, 24, 24, 0.018);
+  --onboarding-tint-b: rgba(24, 24, 24, 0.02);
+  --step-number-border: rgba(24, 24, 24, 0.1);
+  --solid-button-border: rgba(24, 24, 24, 0.08);
+  --solid-button-bg: rgba(24, 24, 24, 0.92);
+  --solid-button-hover: rgba(24, 24, 24, 0.84);
+  --code-bg: rgba(24, 24, 24, 0.05);
+  --notebook-hover: rgba(24, 24, 24, 0.03);
+  --notebook-active: rgba(24, 24, 24, 0.02);
+  --badge-bg: rgba(24, 24, 24, 0.06);
+  --subsection-open-bg: rgba(24, 24, 24, 0.015);
+  --kbd-border: rgba(24, 24, 24, 0.08);
+  --kbd-bg: rgba(24, 24, 24, 0.04);
+  --button-border: rgba(24, 24, 24, 0.08);
+  --button-bg: rgba(24, 24, 24, 0.04);
+  --button-hover: rgba(24, 24, 24, 0.08);
+  --button-hover-border: rgba(24, 24, 24, 0.12);
+  --focus-ring: rgba(24, 24, 24, 0.14);
+  --appearance-shell-bg: rgba(24, 24, 24, 0.03);
+  --appearance-shell-border: rgba(24, 24, 24, 0.08);
+  --appearance-shell-highlight: rgba(255, 255, 255, 0.72);
+  --appearance-option-color: var(--muted);
+  --appearance-option-hover: rgba(24, 24, 24, 0.04);
+  --appearance-option-active-bg: rgba(24, 24, 24, 0.92);
+  --appearance-option-active-ink: rgba(251, 249, 245, 0.98);
+  --appearance-option-shadow: rgba(24, 24, 24, 0.14);
 
   --sans: 'Avenir Next', 'Helvetica Neue', 'Segoe UI', sans-serif;
   --heading: 'Avenir Next', 'Helvetica Neue', sans-serif;
@@ -15,10 +78,89 @@
   font: 13px/1.45 var(--sans);
   color: var(--ink);
   background: var(--canvas);
+  color-scheme: light;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+:root[data-theme='dark'] {
+  --ink: #efe4d7;
+  --muted: #b6a898;
+  --canvas: #161311;
+  --panel: #1b1714;
+  --panel-border: rgba(239, 228, 215, 0.08);
+  --panel-header: rgba(27, 23, 20, 0.94);
+  --panel-elevated: rgba(31, 27, 23, 0.96);
+  --editor: #1b1714;
+  --accent: #f0e1cd;
+  --accent-ink: #1d1814;
+  --hover: rgba(240, 225, 205, 0.08);
+  --hover-strong: rgba(240, 225, 205, 0.12);
+  --hover-soft: rgba(240, 225, 205, 0.05);
+  --surface-soft: rgba(240, 225, 205, 0.08);
+  --surface-softer: rgba(240, 225, 205, 0.06);
+  --surface-subtle: rgba(240, 225, 205, 0.04);
+  --surface-tint: rgba(240, 225, 205, 0.12);
+  --interactive-border: rgba(240, 225, 205, 0.14);
+  --menu-shadow: 0 18px 34px rgba(0, 0, 0, 0.42);
+  --popover-shadow: 0 16px 36px rgba(0, 0, 0, 0.38);
+  --tooltip-shadow: 0 12px 24px rgba(0, 0, 0, 0.32);
+  --calendar-note-indicator: rgba(240, 225, 205, 0.55);
+  --calendar-outside-month: #7f7266;
+  --calendar-today-ring: rgba(240, 225, 205, 0.24);
+  --calendar-selected-bg: var(--accent);
+  --calendar-selected-ink: var(--accent-ink);
+  --calendar-selected-indicator: rgba(29, 24, 20, 0.48);
+  --danger-ink: #f0b1a2;
+  --danger-bg: rgba(152, 71, 57, 0.18);
+  --editor-link-underline: rgba(240, 225, 205, 0.24);
+  --editor-selection: rgba(240, 225, 205, 0.18);
+  --editor-task-border: rgba(240, 225, 205, 0.28);
+  --editor-task-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.04);
+  --editor-task-checked-border: var(--accent);
+  --editor-task-checked-bg: var(--accent);
+  --editor-task-checked-mark: #1d1814;
+  --editor-quote-border: rgba(240, 225, 205, 0.14);
+  --editor-divider: linear-gradient(
+    90deg,
+    rgba(240, 225, 205, 0.04) 0%,
+    rgba(240, 225, 205, 0.18) 18%,
+    rgba(240, 225, 205, 0.18) 82%,
+    rgba(240, 225, 205, 0.04) 100%
+  );
+  --onboarding-tint-a: rgba(240, 225, 205, 0.06);
+  --onboarding-tint-b: rgba(186, 148, 108, 0.07);
+  --step-number-border: rgba(240, 225, 205, 0.12);
+  --solid-button-border: rgba(240, 225, 205, 0.12);
+  --solid-button-bg: var(--accent);
+  --solid-button-hover: #e7d5bf;
+  --code-bg: rgba(240, 225, 205, 0.08);
+  --notebook-hover: rgba(240, 225, 205, 0.05);
+  --notebook-active: rgba(240, 225, 205, 0.08);
+  --badge-bg: rgba(240, 225, 205, 0.1);
+  --subsection-open-bg: rgba(240, 225, 205, 0.04);
+  --kbd-border: rgba(240, 225, 205, 0.1);
+  --kbd-bg: rgba(240, 225, 205, 0.08);
+  --button-border: rgba(240, 225, 205, 0.12);
+  --button-bg: rgba(240, 225, 205, 0.06);
+  --button-hover: rgba(240, 225, 205, 0.12);
+  --button-hover-border: rgba(240, 225, 205, 0.18);
+  --focus-ring: rgba(240, 225, 205, 0.28);
+  --appearance-shell-bg: rgba(240, 225, 205, 0.06);
+  --appearance-shell-border: rgba(240, 225, 205, 0.12);
+  --appearance-shell-highlight: rgba(255, 255, 255, 0.04);
+  --appearance-option-color: var(--muted);
+  --appearance-option-hover: rgba(240, 225, 205, 0.08);
+  --appearance-option-active-bg: var(--accent);
+  --appearance-option-active-ink: var(--accent-ink);
+  --appearance-option-shadow: rgba(0, 0, 0, 0.28);
+  color-scheme: dark;
+}
+
+:root[data-theme-ready='false'] body {
+  opacity: 0;
 }
 
 #root {
@@ -30,6 +172,8 @@ body {
   min-width: 100vw;
   min-height: 100vh;
   overflow: hidden;
+  color: var(--ink);
+  background: var(--canvas);
 }
 
 * {

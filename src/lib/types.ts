@@ -2,6 +2,12 @@ export type Screen = 'note' | 'settings'
 
 export type SaveState = 'idle' | 'saving' | 'saved' | 'error'
 
+export type AppearanceSetting = 'light' | 'dark' | 'system'
+
+export type ResolvedTheme = 'light' | 'dark'
+
+export type WindowOpenShortcutSetting = string
+
 export type UpdateState =
   | 'idle'
   | 'checking'

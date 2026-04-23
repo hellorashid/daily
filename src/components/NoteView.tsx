@@ -1,6 +1,6 @@
 import { Suspense, lazy } from 'react'
 
-import type { DailyNotePayload } from '../lib/types'
+import type { DailyNotePayload, ResolvedTheme } from '../lib/types'
 
 const InkMarkdownEditor = lazy(async () => {
   const module = await import('./InkMarkdownEditor')
@@ -17,9 +17,18 @@ type NoteViewProps = {
   note: DailyNotePayload | null
   onBlur: () => void
   onChange: (value: string) => void
+  theme: ResolvedTheme
 }
 
-export function NoteView({ draft, errorMessage, isLoading, note, onBlur, onChange }: NoteViewProps) {
+export function NoteView({
+  draft,
+  errorMessage,
+  isLoading,
+  note,
+  onBlur,
+  onChange,
+  theme,
+}: NoteViewProps) {
   return (
     <section className="note-view">
       {errorMessage ? <p className="inline-message error">{errorMessage}</p> : null}
@@ -32,6 +41,7 @@ export function NoteView({ draft, errorMessage, isLoading, note, onBlur, onChang
             key={note?.filePath ?? 'daily-note'}
             onBlur={onBlur}
             onChange={onChange}
+            theme={theme}
             value={draft}
           />
         </Suspense>

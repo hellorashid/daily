@@ -1,6 +1,6 @@
 [package]
 name = "daily"
-version = "0.1.5"
+version = "0.1.6"
 description = "A macOS menu bar shell for Daily notes."
 authors = ["Raz"]
 license = ""
@@ -28,3 +28,4 @@ tauri-plugin-dialog = "2.7.0"
 tauri-plugin-store = "2.4.2"
 tauri-plugin-updater = "2.10.1"
 tauri-plugin-process = "2.3.1"
+tauri-plugin-global-shortcut = "2.3.1"

@@ -22,6 +22,7 @@ import {
 import { useEffect, useEffectEvent, useRef } from 'react'
 
 import { markdownPresentationExtension } from '../lib/editor-plugins'
+import type { ResolvedTheme } from '../lib/types'
 
 type InkMarkdownEditorProps = {
   className?: string
@@ -29,11 +30,13 @@ type InkMarkdownEditorProps = {
   isLoading: boolean
   onBlur: () => void
   onChange: (value: string) => void
+  theme: ResolvedTheme
   value: string
 }
 
 const editableCompartment = new Compartment()
 const placeholderCompartment = new Compartment()
+const themeCompartment = new Compartment()
 
 const markdownHighlightStyle = HighlightStyle.define([
   {
@@ -75,7 +78,7 @@ const markdownHighlightStyle = HighlightStyle.define([
     tag: [tags.link, tags.url],
     color: 'var(--ink)',
     textDecoration: 'underline',
-    textDecorationColor: 'rgba(24, 24, 24, 0.14)',
+    textDecorationColor: 'var(--editor-link-underline)',
     textUnderlineOffset: '0.16em',
   },
   {
@@ -93,45 +96,50 @@ const markdownHighlightStyle = HighlightStyle.define([
   },
 ])
 
-const editorTheme = EditorView.theme({
-  '&': {
-    height: '100%',
-    backgroundColor: 'transparent',
-    color: 'var(--ink)',
-    fontFamily: 'var(--sans)',
-    fontSize: '12.75px',
-  },
-  '.cm-scroller': {
-    overflow: 'auto',
-    padding: '8px 12px 18px',
-  },
-  '.cm-content': {
-    minHeight: '100%',
-    padding: '0',
-    whiteSpace: 'pre-wrap',
-    caretColor: 'var(--ink)',
-  },
-  '.cm-line': {
-    padding: '0',
-    lineHeight: '1.68',
-  },
-  '.cm-focused': {
-    outline: 'none',
-  },
-  '.cm-editor': {
-    height: '100%',
-  },
-  '.cm-placeholder': {
-    color: 'var(--muted)',
-    whiteSpace: 'pre-wrap',
-  },
-  '.cm-cursor, .cm-dropCursor': {
-    borderLeftColor: 'var(--ink)',
-  },
-  '.cm-selectionBackground, ::selection': {
-    backgroundColor: 'rgba(24, 24, 24, 0.12)',
-  },
-})
+function createEditorTheme(theme: ResolvedTheme) {
+  return EditorView.theme(
+    {
+      '&': {
+        height: '100%',
+        backgroundColor: 'transparent',
+        color: 'var(--ink)',
+        fontFamily: 'var(--sans)',
+        fontSize: '12.75px',
+      },
+      '.cm-scroller': {
+        overflow: 'auto',
+        padding: '8px 12px 18px',
+      },
+      '.cm-content': {
+        minHeight: '100%',
+        padding: '0',
+        whiteSpace: 'pre-wrap',
+        caretColor: 'var(--ink)',
+      },
+      '.cm-line': {
+        padding: '0',
+        lineHeight: '1.68',
+      },
+      '.cm-focused': {
+        outline: 'none',
+      },
+      '.cm-editor': {
+        height: '100%',
+      },
+      '.cm-placeholder': {
+        color: 'var(--muted)',
+        whiteSpace: 'pre-wrap',
+      },
+      '.cm-cursor, .cm-dropCursor': {
+        borderLeftColor: 'var(--ink)',
+      },
+      '.cm-selectionBackground, ::selection': {
+        backgroundColor: 'var(--editor-selection)',
+      },
+    },
+    { dark: theme === 'dark' },
+  )
+}
 
 function createPlaceholder(loading: boolean) {
   const placeholder = document.createElement('div')
@@ -150,6 +158,7 @@ function buildExtensions(
   isLoading: boolean,
   onChange: (value: string) => void,
   onBlur: () => void,
+  theme: ResolvedTheme,
 ): Extension[] {
   return [
     keymap.of([...defaultKeymap, ...historyKeymap]),
@@ -157,7 +166,7 @@ function buildExtensions(
     markdown({ base: markdownLanguage }),
     EditorView.lineWrapping,
     syntaxHighlighting(markdownHighlightStyle),
-    editorTheme,
+    themeCompartment.of(createEditorTheme(theme)),
     markdownPresentationExtension,
     EditorView.contentAttributes.of({
       spellcheck: 'true',
@@ -185,11 +194,13 @@ export function InkMarkdownEditor({
   isLoading,
   onBlur,
   onChange,
+  theme,
   value,
 }: InkMarkdownEditorProps) {
   const hostRef = useRef<HTMLDivElement | null>(null)
   const editorViewRef = useRef<EditorView | null>(null)
   const initialLoadingRef = useRef(isLoading)
+  const initialThemeRef = useRef(theme)
   const latestValueRef = useRef(value)
 
   const handleChange = useEffectEvent((nextValue: string) => {
@@ -218,6 +229,7 @@ export function InkMarkdownEditor({
         initialLoadingRef.current,
         handleChange,
         handleBlur,
+        initialThemeRef.current,
       ),
     })
 
@@ -250,6 +262,18 @@ export function InkMarkdownEditor({
       ],
     })
   }, [isLoading])
+
+  useEffect(() => {
+    const view = editorViewRef.current
+
+    if (!view) {
+      return
+    }
+
+    view.dispatch({
+      effects: themeCompartment.reconfigure(createEditorTheme(theme)),
+    })
+  }, [theme])
 
   useEffect(() => {
     const view = editorViewRef.current

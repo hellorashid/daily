@@ -1,26 +1,39 @@
 import { load, type Store } from '@tauri-apps/plugin-store'
 
-import type { Notebook } from './types'
+import {
+  DEFAULT_WINDOW_OPEN_SHORTCUT,
+  WINDOW_OPEN_SHORTCUT_DISABLED,
+  normalizeWindowOpenShortcutSetting,
+} from './shortcuts'
+import type {
+  AppearanceSetting,
+  Notebook,
+  WindowOpenShortcutSetting,
+} from './types'
 
 const SETTINGS_FILE = 'settings.json'
 
 const NOTEBOOKS_KEY = 'notebooks'
 const ACTIVE_NOTEBOOK_ID_KEY = 'activeNotebookId'
+const APPEARANCE_KEY = 'appearance'
+const WINDOW_OPEN_SHORTCUT_KEY = 'windowOpenShortcut'
+const WINDOW_OPEN_SHORTCUT_ENABLED_KEY = 'windowOpenShortcutEnabled'
 
 // Legacy key used before notebooks were supported.
 const PRIMARY_FOLDER_KEY = 'primaryFolder'
 
+const APPEARANCE_VALUES = new Set<AppearanceSetting>(['light', 'dark', 'system'])
+
 let storePromise: Promise<Store> | null = null
+let cachedAppearanceSetting: AppearanceSetting | null = null
+let cachedWindowOpenShortcutSetting: WindowOpenShortcutSetting | null = null
+let cachedWindowOpenShortcutEnabledSetting: boolean | null = null
 
 async function getSettingsStore() {
   if (!storePromise) {
     storePromise = load(SETTINGS_FILE, {
       autoSave: 150,
-      defaults: {
-        [NOTEBOOKS_KEY]: [],
-        [ACTIVE_NOTEBOOK_ID_KEY]: null,
-        [PRIMARY_FOLDER_KEY]: null,
-      },
+      defaults: {},
     })
   }
 
@@ -30,6 +43,33 @@ async function getSettingsStore() {
 export type NotebookSettings = {
   activeNotebookId: string | null
   notebooks: Notebook[]
+}
+
+type WindowOpenShortcutPreferences = {
+  enabled: boolean
+  shortcut: WindowOpenShortcutSetting
+}
+
+export function getCachedAppearanceSetting() {
+  return cachedAppearanceSetting
+}
+
+export function getCachedWindowOpenShortcutSetting() {
+  return cachedWindowOpenShortcutSetting
+}
+
+export function getCachedWindowOpenShortcutEnabledSetting() {
+  return cachedWindowOpenShortcutEnabledSetting
+}
+
+function normalizeAppearanceSetting(value: unknown): AppearanceSetting | null {
+  if (typeof value !== 'string') {
+    return null
+  }
+
+  return APPEARANCE_VALUES.has(value as AppearanceSetting)
+    ? (value as AppearanceSetting)
+    : null
 }
 
 function generateNotebookId() {
@@ -107,6 +147,118 @@ export async function persistNotebookSettings(settings: NotebookSettings) {
   await store.set(NOTEBOOKS_KEY, settings.notebooks)
   await store.set(ACTIVE_NOTEBOOK_ID_KEY, settings.activeNotebookId)
   await store.save()
+}
+
+export async function persistAppearanceSetting(appearance: AppearanceSetting) {
+  const store = await getSettingsStore()
+  await store.set(APPEARANCE_KEY, appearance)
+  await store.save()
+  cachedAppearanceSetting = appearance
+}
+
+export async function persistWindowOpenShortcutSetting(shortcut: WindowOpenShortcutSetting) {
+  const normalizedShortcut = normalizeWindowOpenShortcutSetting(shortcut)
+
+  if (!normalizedShortcut || normalizedShortcut === WINDOW_OPEN_SHORTCUT_DISABLED) {
+    throw new Error('Daily couldn’t save that shortcut.')
+  }
+
+  const store = await getSettingsStore()
+  await store.set(WINDOW_OPEN_SHORTCUT_KEY, normalizedShortcut)
+  await store.save()
+  cachedWindowOpenShortcutSetting = normalizedShortcut
+}
+
+export async function persistWindowOpenShortcutEnabledSetting(enabled: boolean) {
+  const store = await getSettingsStore()
+  await store.set(WINDOW_OPEN_SHORTCUT_ENABLED_KEY, enabled)
+  await store.save()
+  cachedWindowOpenShortcutEnabledSetting = enabled
+}
+
+export async function loadAppearanceSetting(): Promise<AppearanceSetting> {
+  if (cachedAppearanceSetting) {
+    return cachedAppearanceSetting
+  }
+
+  const store = await getSettingsStore()
+  const storedAppearance = normalizeAppearanceSetting(
+    await store.get<unknown>(APPEARANCE_KEY),
+  )
+
+  if (storedAppearance) {
+    cachedAppearanceSetting = storedAppearance
+    return storedAppearance
+  }
+
+  const existingKeys = (await store.keys()).filter((key) => key !== APPEARANCE_KEY)
+  const nextAppearance: AppearanceSetting = existingKeys.length === 0 ? 'system' : 'light'
+
+  await store.set(APPEARANCE_KEY, nextAppearance)
+  await store.save()
+  cachedAppearanceSetting = nextAppearance
+
+  return nextAppearance
+}
+
+async function loadWindowOpenShortcutPreferences(): Promise<WindowOpenShortcutPreferences> {
+  if (
+    cachedWindowOpenShortcutSetting
+    && cachedWindowOpenShortcutEnabledSetting !== null
+  ) {
+    return {
+      enabled: cachedWindowOpenShortcutEnabledSetting,
+      shortcut: cachedWindowOpenShortcutSetting,
+    }
+  }
+
+  const store = await getSettingsStore()
+  const storedShortcut = normalizeWindowOpenShortcutSetting(
+    await store.get<string | null>(WINDOW_OPEN_SHORTCUT_KEY),
+  )
+  const storedEnabled = await store.get<boolean | null>(WINDOW_OPEN_SHORTCUT_ENABLED_KEY)
+
+  const nextShortcut =
+    storedShortcut && storedShortcut !== WINDOW_OPEN_SHORTCUT_DISABLED
+      ? storedShortcut
+      : DEFAULT_WINDOW_OPEN_SHORTCUT
+  const nextEnabled =
+    typeof storedEnabled === 'boolean'
+      ? storedEnabled
+      : storedShortcut !== WINDOW_OPEN_SHORTCUT_DISABLED
+
+  const shouldPersistShortcut = storedShortcut !== nextShortcut
+  const shouldPersistEnabled = storedEnabled !== nextEnabled
+
+  if (shouldPersistShortcut) {
+    await store.set(WINDOW_OPEN_SHORTCUT_KEY, nextShortcut)
+  }
+
+  if (shouldPersistEnabled) {
+    await store.set(WINDOW_OPEN_SHORTCUT_ENABLED_KEY, nextEnabled)
+  }
+
+  if (shouldPersistShortcut || shouldPersistEnabled) {
+    await store.save()
+  }
+
+  cachedWindowOpenShortcutSetting = nextShortcut
+  cachedWindowOpenShortcutEnabledSetting = nextEnabled
+
+  return {
+    enabled: nextEnabled,
+    shortcut: nextShortcut,
+  }
+}
+
+export async function loadWindowOpenShortcutSetting(): Promise<WindowOpenShortcutSetting> {
+  const settings = await loadWindowOpenShortcutPreferences()
+  return settings.shortcut
+}
+
+export async function loadWindowOpenShortcutEnabledSetting(): Promise<boolean> {
+  const settings = await loadWindowOpenShortcutPreferences()
+  return settings.enabled
 }
 
 export async function loadNotebookSettings(): Promise<NotebookSettings> {
